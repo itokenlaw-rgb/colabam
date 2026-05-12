@@ -830,6 +830,7 @@ export default function App() {
     pattern: string;       // legacy 'checker' など
     patternType: string;   // 新しいパターン種別
     gradientDir: string;   // グラデーション方向 'to bottom' | 'to right' | '135deg' etc.
+    bgImage?: string;      // 背景画像URL（設定時はこちらが優先）
   }>({ color: '#fffbe6', color2: '#f26b9a', pattern: 'none', patternType: 'solid', gradientDir: 'to bottom', bgImage: undefined });
   const [targetSlotId, setTargetSlotId] = useState<string | null>(null);
   const [cropImageUrl, setCropImageUrl] = useState<string | null>(null);
