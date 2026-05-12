@@ -1,0 +1,219 @@
+.crop-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 500px;
+  height: 100dvh;
+  background: #333;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+}
+
+.crop-modal-header {
+  height: 50px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(0,0,0,0.8);
+}
+
+.crop-btn {
+  background: none;
+  border: none;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 15px;
+  height: 100%;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.crop-btn.confirm {
+  background: #3b4f7a;
+}
+
+.crop-container {
+  flex: 1;
+  position: relative;
+  background: #222;
+}
+
+/* 特殊形状のプレビューオーバーレイ（視覚的ヒントのみ） */
+.reactEasyCrop_CropArea::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none;
+}
+
+.crop-container[data-shape="heart"] .reactEasyCrop_CropArea::after {
+  background: rgba(242, 107, 154, 0.3);
+  clip-path: polygon(50% 15%, 80% 0%, 100% 20%, 100% 50%, 50% 95%, 0% 50%, 0% 20%, 20% 0%);
+  border: none;
+}
+
+.crop-container[data-shape="star"] .reactEasyCrop_CropArea::after {
+  background: rgba(242, 107, 154, 0.3);
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+  border: none;
+}
+
+.crop-container[data-shape="bubble"] .reactEasyCrop_CropArea::after {
+  background: rgba(242, 107, 154, 0.3);
+  clip-path: polygon(0% 0%, 100% 0%, 100% 75%, 75% 75%, 75% 100%, 50% 75%, 0% 75%);
+  border: none;
+}
+
+/* コントロールエリア */
+.crop-controls {
+  height: 150px;
+  background: #111;
+  display: flex;
+  flex-direction: column;
+  padding: 10px 0;
+}
+
+.sliders-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 0 20px;
+}
+
+.control-slider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  color: #888;
+}
+
+.control-slider input[type="range"] {
+  flex: 1;
+  max-width: 300px;
+}
+
+.shape-selector {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 15px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 20px;
+  scrollbar-width: none;
+}
+
+.shape-selector::-webkit-scrollbar {
+  display: none;
+}
+
+.shape-btn {
+  background: none;
+  border: none;
+  color: #666;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: color 0.2s;
+  min-width: 50px;
+}
+
+.shape-btn.active {
+  color: white;
+}
+
+.shape-btn span {
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+/* ===== crop-mask-overlay: 特殊形状で枠外を暗くするマスク ===== */
+/*
+  仕組み：
+  - crop-container は position:relative
+  - crop-mask-overlay は absolute で全面を覆う
+  - clip-path で「見せたい形」を定義し、その外側だけ半透明の暗色で覆う
+  - これにより「星形の穴が開いたダークオーバーレイ」になる
+  - ただし clip-path は内側を表示するので、
+    background を暗色にして clip-path の外側(=darkened area)を見せるには
+    「外側マスク」が必要。
+    → drop-shadow + invert trick の代わりに
+      border + padding の大きな擬似要素を使う。
+*/
+
+.crop-mask-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* デフォルト（square/rectangle/etc.）は何も表示しない */
+.crop-mask-overlay.square,
+.crop-mask-overlay.rectangle,
+.crop-mask-overlay.rectangle-h {
+  display: none;
+}
+
+/* 円・楕円は react-easy-crop が cropShape="round" で対応済みなので非表示 */
+.crop-mask-overlay.circle,
+.crop-mask-overlay.ellipse,
+.crop-mask-overlay.ellipse-h {
+  display: none;
+}
+
+/*
+  ハート・スター・ふきだし用：
+  SVG の box-shadow 的なアプローチとして
+  「中央に clip-path した透明な穴を持つ巨大ボックスシャドウ擬似要素」を使う。
+  具体的には ::before で全面 rgba 暗色 → ::after で clip-path で形をくり抜く。
+  
+  シンプルな実装：
+  - overlay 自体は全面rgba(0,0,0,0.55)
+  - ::after でクロップ枠のおおよそのサイズ・位置を clip-path で "穴あき" にする
+  
+  react-easy-crop の実際のクロップ枠サイズは動的なので完全には合わせられないが、
+  「形のプレビュー」として中央に clip-path シルエットを表示する。
+*/
+
+.crop-mask-overlay.heart,
+.crop-mask-overlay.star,
+.crop-mask-overlay.bubble {
+  background: rgba(0, 0, 0, 0.0); /* 背景は透明 */
+}
+
+/* 形状シルエットを中央に表示 */
+.crop-mask-overlay.heart::after,
+.crop-mask-overlay.star::after,
+.crop-mask-overlay.bubble::after {
+  content: '';
+  position: absolute;
+  /* クロップ枠はおおよそ中央80%程度の正方形に収まる */
+  left: 10%;
+  top: 10%;
+  width: 80%;
+  height: 80%;
+  /* 半透明のピンクで形をハイライト */
+  background: rgba(242, 107, 154, 0.25);
+  border: 2px solid rgba(255, 255, 255, 0.7);
+}
+
+.crop-mask-overlay.heart::after {
+  clip-path: polygon(50% 15%, 80% 0%, 100% 20%, 100% 50%, 50% 95%, 0% 50%, 0% 20%, 20% 0%);
+}
+
+.crop-mask-overlay.star::after {
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+}
+
+.crop-mask-overlay.bubble::after {
+  clip-path: polygon(0% 0%, 100% 0%, 100% 75%, 75% 75%, 75% 100%, 50% 75%, 0% 75%);
+}
