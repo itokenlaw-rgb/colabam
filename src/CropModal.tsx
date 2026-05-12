@@ -130,7 +130,7 @@ function isSpecialShape(s: ShapeType) {
 }
 
 // ===== コンテナサイズ取得フック =====
-function useContainerSize(ref: React.RefObject<HTMLDivElement>) {
+function useContainerSize(ref: React.RefObject<HTMLDivElement | null>) {
   const [size, setSize] = useState({ width: 0, height: 0 });
   useEffect(() => {
     const el = ref.current;
