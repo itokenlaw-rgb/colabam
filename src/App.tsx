@@ -951,8 +951,8 @@ export default function App() {
       content,
       x: 50,
       y: 50,
-      width: type === 'text' ? 200 : 120,
-      height: type === 'text' ? 60 : 120,
+      width: type === 'text' ? 200 : type === 'stamp' ? 320 : 120,
+      height: type === 'text' ? 60 : type === 'stamp' ? 95 : 120,
       rotation: 0,
       zIndex: maxZIndex.current,
       ...extra,
@@ -1317,7 +1317,7 @@ export default function App() {
       case 'stamp':
         return (
           <StampMenu
-            onAdd={(url) => addItem('stamp', url, { width: 100, height: 100 })}
+            onAdd={(url) => addItem('stamp', url, { width: 320, height: 95 })}
           />
         );
       case 'background':
