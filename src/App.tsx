@@ -936,6 +936,12 @@ export default function App() {
   const [replaceTargetId, setReplaceTargetId] = useState<string | null>(null);
   const [retrimTargetId, setRetrimTargetId] = useState<string | null>(null);
 
+  // 写真ストック（複数枚事前選択）
+  const [photoStock, setPhotoStock] = useState<string[]>([]);
+  // 写真追加サブメニューの表示
+  const [showPhotoAddMenu, setShowPhotoAddMenu] = useState(false);
+  const photoAddMenuRef = useRef<HTMLDivElement>(null);
+
   const canvasRef = useRef<HTMLDivElement>(null);
   const maxZIndex = useRef(10);
 
@@ -1257,6 +1263,56 @@ export default function App() {
     setTargetSlotId('__retrim__');
   };
 
+  // ストックへ複数枚追加
+  const handleStockFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    const readers = files.map(file => new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => resolve(ev.target?.result as string);
+      reader.readAsDataURL(file);
+    }));
+    Promise.all(readers).then(urls => {
+      setPhotoStock(prev => [...prev, ...urls]);
+    });
+    e.target.value = '';
+    setShowPhotoAddMenu(false);
+  };
+
+  // 枠を全部埋める（ストックからランダム）
+  const handleFillAllSlots = () => {
+    if (photoStock.length === 0) {
+      alert('先に「写真をストックに追加」で写真を選んでください。');
+      return;
+    }
+    if (templateSlots.length === 0) {
+      alert('写真枠がありません。先に「写真枠配置」から枠を配置してください。');
+      return;
+    }
+    pushHistory(items);
+    const shuffled = [...photoStock].sort(() => Math.random() - 0.5);
+    const newItems: CanvasItem[] = templateSlots.map((slot, i) => {
+      const imgUrl = shuffled[i % shuffled.length];
+      maxZIndex.current += 1;
+      return {
+        id: `photo-slot-${slot.id}-${Date.now()}-${i}`,
+        type: 'photo' as ItemType,
+        content: imgUrl,
+        originalImageUrl: imgUrl,
+        x: slot.x,
+        y: slot.y,
+        width: slot.width,
+        height: slot.height,
+        rotation: slot.rotation ?? 0,
+        zIndex: maxZIndex.current,
+        clipShape: undefined,
+      };
+    });
+    setItems(prev => [...prev, ...newItems]);
+    setTemplateSlots([]);
+    setShowPhotoAddMenu(false);
+  };
+
   const selectedIdRef = useRef<string | null>(null);
   selectedIdRef.current = selectedId;
 
@@ -1302,6 +1358,7 @@ export default function App() {
   }, []);
 
   const handleTabToggle = (tab: MainTab) => {
+    setShowPhotoAddMenu(false);
     setActiveMainTab(prev => prev === tab ? null : tab);
   };
 
@@ -1486,7 +1543,7 @@ export default function App() {
         </button>
       </header>
 
-      <main className="canvas-area" onClick={() => { setSelectedId(null); setPhotoSubMenuId(null); setActiveMainTab(null); }}>
+      <main className="canvas-area" onClick={() => { setSelectedId(null); setPhotoSubMenuId(null); setActiveMainTab(null); setShowPhotoAddMenu(false); }}>
         <div
           ref={canvasRef}
           className="album-canvas"
@@ -1744,9 +1801,115 @@ export default function App() {
           <button className={`tab-btn ${activeMainTab === 'background' ? 'active' : ''}`} onClick={() => handleTabToggle('background')}>
             <Grid size={20} /><span>背景変更</span>
           </button>
-          <button className="tab-btn" onClick={() => { setTargetSlotId(null); document.getElementById('photo-upload')?.click(); }}>
-            <ImagePlus size={20} /><span>写真追加</span>
-          </button>
+          <div style={{ position: 'relative' }} ref={photoAddMenuRef}>
+            <button
+              className={`tab-btn ${showPhotoAddMenu ? 'active' : ''}`}
+              onClick={(e) => { e.stopPropagation(); setShowPhotoAddMenu(prev => !prev); setActiveMainTab(null); }}
+            >
+              <ImagePlus size={20} /><span>写真追加</span>
+            </button>
+            {showPhotoAddMenu && (
+              <div
+                onClick={e => e.stopPropagation()}
+                style={{
+                  position: 'absolute',
+                  bottom: '100%',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  marginBottom: 8,
+                  background: 'rgba(30,30,30,0.96)',
+                  borderRadius: 12,
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+                  overflow: 'hidden',
+                  minWidth: 200,
+                  zIndex: 9999,
+                }}
+              >
+                <button
+                  onPointerDown={e => e.stopPropagation()}
+                  onClick={() => { setShowPhotoAddMenu(false); setTargetSlotId(null); document.getElementById('photo-upload')?.click(); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    width: '100%', padding: '12px 16px',
+                    background: 'transparent', border: 'none',
+                    borderBottom: '1px solid rgba(255,255,255,0.1)',
+                    color: '#fff', fontSize: 13, fontWeight: 600,
+                    cursor: 'pointer', textAlign: 'left',
+                  }}
+                >
+                  <span style={{ fontSize: 18, minWidth: 24 }}>📷</span>
+                  <div>
+                    <div>１枚追加</div>
+                    <div style={{ fontSize: 10, color: '#aaa', fontWeight: 400 }}>写真を1枚選んで追加</div>
+                  </div>
+                </button>
+                <button
+                  onPointerDown={e => e.stopPropagation()}
+                  onClick={() => { document.getElementById('photo-stock-upload')?.click(); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    width: '100%', padding: '12px 16px',
+                    background: 'transparent', border: 'none',
+                    borderBottom: '1px solid rgba(255,255,255,0.1)',
+                    color: '#fff', fontSize: 13, fontWeight: 600,
+                    cursor: 'pointer', textAlign: 'left',
+                  }}
+                >
+                  <span style={{ fontSize: 18, minWidth: 24 }}>🗂️</span>
+                  <div>
+                    <div>写真をストックに追加</div>
+                    <div style={{ fontSize: 10, color: '#aaa', fontWeight: 400 }}>
+                      {photoStock.length > 0 ? `現在${photoStock.length}枚ストック済み` : '複数枚まとめて選べます'}
+                    </div>
+                  </div>
+                </button>
+                <button
+                  onPointerDown={e => e.stopPropagation()}
+                  onClick={() => handleFillAllSlots()}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    width: '100%', padding: '12px 16px',
+                    background: photoStock.length > 0 && templateSlots.length > 0
+                      ? 'rgba(242,107,154,0.18)' : 'transparent',
+                    border: 'none',
+                    borderBottom: photoStock.length > 0 ? '1px solid rgba(255,255,255,0.1)' : 'none',
+                    color: photoStock.length > 0 && templateSlots.length > 0 ? '#f26b9a' : '#666',
+                    fontSize: 13, fontWeight: 600,
+                    cursor: photoStock.length > 0 && templateSlots.length > 0 ? 'pointer' : 'default',
+                    textAlign: 'left',
+                  }}
+                >
+                  <span style={{ fontSize: 18, minWidth: 24 }}>🎲</span>
+                  <div>
+                    <div>枠を全部埋める</div>
+                    <div style={{ fontSize: 10, color: '#aaa', fontWeight: 400 }}>
+                      {photoStock.length === 0
+                        ? 'ストックに写真がありません'
+                        : templateSlots.length === 0
+                          ? '空き枠がありません'
+                          : `ストック${photoStock.length}枚 → ${templateSlots.length}枠にランダム配置`}
+                    </div>
+                  </div>
+                </button>
+                {photoStock.length > 0 && (
+                  <button
+                    onPointerDown={e => e.stopPropagation()}
+                    onClick={() => { setPhotoStock([]); setShowPhotoAddMenu(false); }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      width: '100%', padding: '10px 16px',
+                      background: 'transparent', border: 'none',
+                      color: '#ff7070', fontSize: 12, fontWeight: 500,
+                      cursor: 'pointer', textAlign: 'left',
+                    }}
+                  >
+                    <span style={{ fontSize: 16, minWidth: 24 }}>🗑️</span>
+                    <div>ストックを全部消す（{photoStock.length}枚）</div>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
           <button className={`tab-btn ${activeMainTab === 'stamp' ? 'active' : ''}`} onClick={() => handleTabToggle('stamp')}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 2a5 5 0 0 1 5 5c0 2-1 3.5-2.5 4.5V13h-5v-1.5C8 10.5 7 9 7 7a5 5 0 0 1 5-5z"/>
@@ -1766,6 +1929,7 @@ export default function App() {
 
       <input id="photo-upload" type="file" accept="image/*" onChange={handleFileUpload} style={{ display: 'none' }} />
       <input id="photo-replace-upload" type="file" accept="image/*" onChange={handleReplaceFileUpload} style={{ display: 'none' }} />
+      <input id="photo-stock-upload" type="file" accept="image/*" multiple onChange={handleStockFileUpload} style={{ display: 'none' }} />
 
       {cropImageUrl && (
         <CropModal imageUrl={cropImageUrl} initialShape={cropInitialShape} onComplete={handleCropComplete} onCancel={() => { setCropImageUrl(null); setTargetSlotId(null); setCropInitialShape(undefined); }} />
