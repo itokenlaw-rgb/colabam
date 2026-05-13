@@ -1897,7 +1897,7 @@ export default function App() {
                 >
                   <span style={{ fontSize: 18, minWidth: 24 }}>🎲</span>
                   <div>
-                    <div>ストックから枠に<br>ランダムで入れる</div>
+                    <div>ストックから枠に<br />ランダムで入れる</div>
                     <div style={{ fontSize: 10, color: '#aaa', fontWeight: 400 }}>
                       {photoStock.length === 0
                         ? 'ストックに写真がありません'
