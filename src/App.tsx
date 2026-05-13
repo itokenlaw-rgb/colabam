@@ -930,6 +930,11 @@ export default function App() {
   const [fontSize, setFontSize] = useState(24);
   const [textStyle, setTextStyle] = useState<TextStyleId>('normal');
 
+  // 写真サブメニュー用state
+  const [photoSubMenuId, setPhotoSubMenuId] = useState<string | null>(null);
+  const [replaceTargetId, setReplaceTargetId] = useState<string | null>(null);
+  const [retrimTargetId, setRetrimTargetId] = useState<string | null>(null);
+
   const canvasRef = useRef<HTMLDivElement>(null);
   const maxZIndex = useRef(10);
 
@@ -1049,6 +1054,35 @@ export default function App() {
     const clipShape = (cropShape === 'heart' || cropShape === 'star' || cropShape === 'bubble')
       ? cropShape as ClipShape
       : undefined;
+
+    if (targetSlotId === '__replace__' && replaceTargetId) {
+      // 写真を差し替え（サイズ・位置・zIndexは維持）
+      pushHistory(items);
+      setItems(prev => prev.map(i =>
+        i.id === replaceTargetId
+          ? { ...i, content: croppedDataUrl, clipShape }
+          : i
+      ));
+      setReplaceTargetId(null);
+      setCropImageUrl(null);
+      setTargetSlotId(null);
+      return;
+    }
+
+    if (targetSlotId === '__retrim__' && retrimTargetId) {
+      // 同じ写真でトリミングやり直し
+      pushHistory(items);
+      setItems(prev => prev.map(i =>
+        i.id === retrimTargetId
+          ? { ...i, content: croppedDataUrl, clipShape }
+          : i
+      ));
+      setRetrimTargetId(null);
+      setCropImageUrl(null);
+      setTargetSlotId(null);
+      return;
+    }
+
     if (targetSlotId) {
       const slot = templateSlots.find(s => s.id === targetSlotId);
       if (slot) {
@@ -1142,6 +1176,66 @@ export default function App() {
     pushHistory(items);
     setItems(prev => prev.filter(i => i.id !== id));
     setSelectedId(null);
+    setPhotoSubMenuId(null);
+  };
+
+  const handleBringToFront = (id: string) => {
+    const maxZ = Math.max(...items.map(i => i.zIndex), maxZIndex.current) + 1;
+    maxZIndex.current = maxZ;
+    setItems(prev => prev.map(i => i.id === id ? { ...i, zIndex: maxZ } : i));
+    setPhotoSubMenuId(null);
+  };
+
+  const handleSendToBack = (id: string) => {
+    const minZ = Math.min(...items.map(i => i.zIndex)) - 1;
+    setItems(prev => prev.map(i => i.id === id ? { ...i, zIndex: minZ } : i));
+    setPhotoSubMenuId(null);
+  };
+
+  const handleReplacePhoto = (id: string) => {
+    setReplaceTargetId(id);
+    setPhotoSubMenuId(null);
+    document.getElementById('photo-replace-upload')?.click();
+  };
+
+  const handleReplaceFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !replaceTargetId) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const item = items.find(i => i.id === replaceTargetId);
+      if (!item) return;
+      // 元のアイテムのサイズ・形状でクロップモーダルを開く
+      const ratio = item.width / item.height;
+      let shape: typeof cropInitialShape = undefined;
+      if (item.clipShape === 'heart') shape = 'heart';
+      else if (item.clipShape === 'star') shape = 'star';
+      else if (ratio > 1.15) shape = 'rectangle-h';
+      else if (ratio < 0.85) shape = 'rectangle';
+      else shape = 'square';
+      setCropInitialShape(shape);
+      setCropImageUrl(ev.target?.result as string);
+      setTargetSlotId('__replace__');
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleRetrimPhoto = (id: string) => {
+    const item = items.find(i => i.id === id);
+    if (!item || !item.content) return;
+    setRetrimTargetId(id);
+    setPhotoSubMenuId(null);
+    const ratio = item.width / item.height;
+    let shape: typeof cropInitialShape = undefined;
+    if (item.clipShape === 'heart') shape = 'heart';
+    else if (item.clipShape === 'star') shape = 'star';
+    else if (ratio > 1.15) shape = 'rectangle-h';
+    else if (ratio < 0.85) shape = 'rectangle';
+    else shape = 'square';
+    setCropInitialShape(shape);
+    setCropImageUrl(item.content);
+    setTargetSlotId('__retrim__');
   };
 
   const selectedIdRef = useRef<string | null>(null);
@@ -1373,7 +1467,7 @@ export default function App() {
         </button>
       </header>
 
-      <main className="canvas-area" onClick={() => { setSelectedId(null); setActiveMainTab(null); }}>
+      <main className="canvas-area" onClick={() => { setSelectedId(null); setPhotoSubMenuId(null); setActiveMainTab(null); }}>
         <div
           ref={canvasRef}
           className="album-canvas"
@@ -1460,7 +1554,15 @@ export default function App() {
                     transform: `rotate(${item.rotation}deg)`,
                     ...(item.clipShape ? { background: 'transparent' } : {}),
                   }}
-                  onClick={(e) => { e.stopPropagation(); setSelectedId(item.id); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedId(item.id);
+                    if (item.type === 'photo') {
+                      setPhotoSubMenuId(prev => prev === item.id ? null : item.id);
+                    } else {
+                      setPhotoSubMenuId(null);
+                    }
+                  }}
                 >
                   {item.type === 'text' ? (
                     (() => {
@@ -1515,6 +1617,77 @@ export default function App() {
                   >
                     <X size={12} />
                   </button>
+                )}
+
+                {/* 写真サブメニュー */}
+                {isSelected && item.type === 'photo' && photoSubMenuId === item.id && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      top: item.height + 6,
+                      zIndex: 9999,
+                      background: 'rgba(30,30,30,0.93)',
+                      borderRadius: 10,
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
+                      overflow: 'hidden',
+                      minWidth: 160,
+                      transform: `rotate(${-item.rotation}deg)`,
+                    }}
+                    onClick={e => e.stopPropagation()}
+                    onPointerDown={e => e.stopPropagation()}
+                  >
+                    {[
+                      {
+                        label: '前面へ',
+                        icon: '⬆',
+                        desc: '最前面に移動',
+                        onClick: () => handleBringToFront(item.id),
+                      },
+                      {
+                        label: '背面へ',
+                        icon: '⬇',
+                        desc: '最背面に移動',
+                        onClick: () => handleSendToBack(item.id),
+                      },
+                      {
+                        label: 'スキミングする',
+                        icon: '✂️',
+                        desc: 'トリミングやり直し',
+                        onClick: () => handleRetrimPhoto(item.id),
+                      },
+                      {
+                        label: '写真を変更する',
+                        icon: '🔄',
+                        desc: '別の写真に差し替え',
+                        onClick: () => handleReplacePhoto(item.id),
+                      },
+                    ].map((action, idx, arr) => (
+                      <button
+                        key={action.label}
+                        onPointerDown={e => e.stopPropagation()}
+                        onClick={(e) => { e.stopPropagation(); action.onClick(); }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                          width: '100%',
+                          padding: '10px 14px',
+                          background: 'transparent',
+                          border: 'none',
+                          borderBottom: idx < arr.length - 1 ? '1px solid rgba(255,255,255,0.1)' : 'none',
+                          color: '#fff',
+                          fontSize: 13,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                        }}
+                      >
+                        <span style={{ fontSize: 16, minWidth: 22 }}>{action.icon}</span>
+                        <span style={{ flex: 1 }}>{action.label}</span>
+                      </button>
+                    ))}
+                  </div>
                 )}
 
                 {isSelected && (
@@ -1573,6 +1746,7 @@ export default function App() {
       </nav>
 
       <input id="photo-upload" type="file" accept="image/*" onChange={handleFileUpload} style={{ display: 'none' }} />
+      <input id="photo-replace-upload" type="file" accept="image/*" onChange={handleReplaceFileUpload} style={{ display: 'none' }} />
 
       {cropImageUrl && (
         <CropModal imageUrl={cropImageUrl} initialShape={cropInitialShape} onComplete={handleCropComplete} onCancel={() => { setCropImageUrl(null); setTargetSlotId(null); setCropInitialShape(undefined); }} />
