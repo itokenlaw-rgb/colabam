@@ -608,17 +608,17 @@ interface BgSeries {
 const BG_SERIES: BgSeries[] = [
   {
     id: 's1',
-    label: 'シリーズ1',
+    label: '水彩',
     files: Array.from({ length: 12 }, (_, i) => `/colabam_bimg${101 + i}.jpg`),
   },
   {
     id: 's2',
-    label: 'シリーズ2',
+    label: 'ポップ',
     files: Array.from({ length: 12 }, (_, i) => `/colabam_bimg${201 + i}.jpg`),
   },
   {
     id: 's3',
-    label: 'シリーズ3',
+    label: 'ｽﾀｲﾘｯｼｭ',
     files: Array.from({ length: 12 }, (_, i) => `/colabam_bimg${301 + i}.jpg`),
   },
 ];
@@ -1801,12 +1801,12 @@ export default function App() {
 
       <nav className="bottom-menu">
         {activeMainTab !== null && (
-          <div className="sub-menu" style={
-            activeMainTab === 'template' && customPicking ? { height: 180 }
-            : activeMainTab === 'text' ? { height: 160 }
-            : activeMainTab === 'background' ? { height: 205 }
-            : undefined
-          }>
+<div className="sub-menu" style={
+  activeMainTab === 'template' && customPicking ? { height: 180 }
+  : activeMainTab === 'text' ? { height: 160 }
+  : activeMainTab === 'background' ? { height: 185 } // 185に減らす
+  : undefined
+}>
             {renderSubMenu()}
           </div>
         )}
@@ -1897,7 +1897,7 @@ export default function App() {
                 >
                   <span style={{ fontSize: 18, minWidth: 24 }}>🎲</span>
                   <div>
-                    <div>枠を全部埋める</div>
+                    <div>ストックから枠に<br>ランダムで入れる</div>
                     <div style={{ fontSize: 10, color: '#aaa', fontWeight: 400 }}>
                       {photoStock.length === 0
                         ? 'ストックに写真がありません'
