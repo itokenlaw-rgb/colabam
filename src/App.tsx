@@ -639,7 +639,7 @@ const STAMP_CATEGORIES: StampCategoryDef[] = [
 // ファイルを追加するときはここに追記するだけでOK
 const STAMP_FILES: Record<StampCategory, string[]> = {
   'with-bg': Array.from({ length: 12 }, (_, i) =>
-    `/stamps/with-bg/colabammojiiimg${String(i + 1).padStart(3, '0')}.jpg`
+    `/stamps/with-bg/colabammojiimg${String(i + 1).padStart(3, '0')}.jpg`
   ),
   'no-bg': Array.from({ length: 12 }, (_, i) =>
     `/stamps/no-bg/colabammojitouka${String(i + 1).padStart(3, '0')}.png`
