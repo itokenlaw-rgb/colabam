@@ -621,6 +621,90 @@ const BG_SERIES: BgSeries[] = [
   },
 ];
 
+// ===== スタンプ画像定義 =====
+// カテゴリーを追加する場合は STAMP_CATEGORIES と STAMP_FILES を編集してください。
+// 画像ファイルは public/stamps/with-bg/ または public/stamps/no-bg/ に配置してください。
+type StampCategory = 'with-bg' | 'no-bg';
+
+interface StampCategoryDef {
+  id: StampCategory;
+  label: string;
+}
+
+const STAMP_CATEGORIES: StampCategoryDef[] = [
+  { id: 'with-bg', label: '背景あり' },
+  { id: 'no-bg',   label: '背景なし' },
+];
+
+// ファイルを追加するときはここに追記するだけでOK
+const STAMP_FILES: Record<StampCategory, string[]> = {
+  'with-bg': Array.from({ length: 12 }, (_, i) =>
+    `/stamps/with-bg/colabammojiiimg${String(i + 1).padStart(3, '0')}.jpg`
+  ),
+  'no-bg': Array.from({ length: 12 }, (_, i) =>
+    `/stamps/no-bg/colabammojitouka${String(i + 1).padStart(3, '0')}.png`
+  ),
+};
+
+// ===== スタンプメニューコンポーネント =====
+function StampMenu({ onAdd }: { onAdd: (url: string) => void }) {
+  const [activeCategory, setActiveCategory] = useState<StampCategory>('with-bg');
+  const files = STAMP_FILES[activeCategory];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, height: '100%' }}>
+      {/* カテゴリータブ */}
+      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+        {STAMP_CATEGORIES.map(cat => (
+          <button
+            key={cat.id}
+            onClick={() => setActiveCategory(cat.id)}
+            style={{
+              flex: 1, padding: '3px 0', borderRadius: 6,
+              border: `2px solid ${activeCategory === cat.id ? 'var(--primary)' : '#ddd'}`,
+              background: activeCategory === cat.id ? '#fff0f5' : 'white',
+              cursor: 'pointer', fontSize: 11,
+              fontWeight: activeCategory === cat.id ? 'bold' : 'normal',
+              color: activeCategory === cat.id ? 'var(--primary)' : '#555',
+            }}
+          >{cat.label}</button>
+        ))}
+      </div>
+
+      {/* スタンプ画像グリッド */}
+      {files.length === 0 ? (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, color: '#aaa', fontSize: 12 }}>
+          画像を追加してください<br />
+          <code style={{ fontSize: 10, color: '#bbb', marginLeft: 4 }}>
+            public/stamps/{activeCategory}/
+          </code>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, overflowY: 'auto', paddingBottom: 4 }}>
+          {files.map((src, i) => (
+            <button
+              key={src}
+              onClick={() => onAdd(src)}
+              style={{
+                width: 52, height: 52, borderRadius: 8, padding: 2,
+                border: '1px solid #eee', background: 'white',
+                cursor: 'pointer', flexShrink: 0, overflow: 'hidden',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <img
+                src={src}
+                alt={`スタンプ${i + 1}`}
+                style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+              />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ===== 背景画像タブ（シリーズ切替） =====
 function ImageBgTab({ canvasBg, setCanvasBg }: {
   canvasBg: BgState;
@@ -1232,11 +1316,9 @@ export default function App() {
         );
       case 'stamp':
         return (
-          <div className="stamp-list">
-            {['🌸', '⭐', '🎀', '💖', '🌈', '🍀', '🎵', '🦋'].map((emoji, i) => (
-              <div key={i} className="stamp-item emoji-stamp" onClick={() => addItem('text', emoji, { fontSize: 40 })}>{emoji}</div>
-            ))}
-          </div>
+          <StampMenu
+            onAdd={(url) => addItem('stamp', url, { width: 100, height: 100 })}
+          />
         );
       case 'background':
         return <BgMenu canvasBg={canvasBg} setCanvasBg={setCanvasBg} />;
@@ -1305,7 +1387,7 @@ export default function App() {
                     : i
                   ));
                 }}
-                lockAspectRatio={item.type === 'photo'}
+                lockAspectRatio={item.type === 'photo' || item.type === 'stamp'}
                 style={{ zIndex: item.zIndex }}
                 dragHandleClassName="drag-handle"
                 enableResizing={isSelected ? undefined : false}
@@ -1348,6 +1430,13 @@ export default function App() {
                         </div>
                       );
                     })()
+                  ) : item.type === 'stamp' ? (
+                    <img
+                      src={item.content}
+                      className="item-photo drag-handle"
+                      alt=""
+                      style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+                    />
                   ) : (
                     <img
                       src={item.content}
