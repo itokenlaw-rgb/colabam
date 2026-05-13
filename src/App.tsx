@@ -590,9 +590,10 @@ const GRAD_DIRS = [
 const PRESET_COLORS = [
   '#ffffff', '#f8bbd0', '#fce4ec', '#fff3e0', '#fffde7',
   '#e8f5e9', '#e3f2fd', '#ede7f6', '#ffd6e7', '#d1fae5',
-  '#f26b9a', '#e91e8c', '#ff6b6b', '#ffa726', '#ffee58',
-  '#66bb6a', '#26c6da', '#5c6bc0', '#ab47bc', '#8d6e63',
-  '#333333', '#555555', '#888888', '#bbbbbb', '#000000',
+  '#f26b9a', '#e91e8c', '#ff6b6b',
+  '#ffa726', '#ffee58', '#66bb6a', '#26c6da', '#5c6bc0',
+  '#ab47bc', '#8d6e63', '#333333', '#555555', '#888888',
+  '#bbbbbb', '#000000', '#f5f5dc',
 ];
 
 // ===== 背景画像リスト =====
@@ -784,15 +785,8 @@ function BgMenu({ canvasBg, setCanvasBg }: {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, height: '100%' }}>
-      {/* タブ切替：カラー / 背景画像 */}
+      {/* タブ切替：背景画像 / カラー */}
       <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-        <button
-          onClick={() => setBgTab('color')}
-          style={{
-            flex: 1, padding: '3px 0', borderRadius: 6, border: `2px solid ${bgTab === 'color' ? 'var(--primary)' : '#ddd'}`,
-            background: bgTab === 'color' ? '#fff0f5' : 'white', cursor: 'pointer', fontSize: 11, fontWeight: bgTab === 'color' ? 'bold' : 'normal', color: bgTab === 'color' ? 'var(--primary)' : '#555',
-          }}
-        >🎨 カラー</button>
         <button
           onClick={() => setBgTab('image')}
           style={{
@@ -800,12 +794,19 @@ function BgMenu({ canvasBg, setCanvasBg }: {
             background: bgTab === 'image' ? '#fff0f5' : 'white', cursor: 'pointer', fontSize: 11, fontWeight: bgTab === 'image' ? 'bold' : 'normal', color: bgTab === 'image' ? 'var(--primary)' : '#555',
           }}
         >🖼️ 背景画像</button>
+        <button
+          onClick={() => setBgTab('color')}
+          style={{
+            flex: 1, padding: '3px 0', borderRadius: 6, border: `2px solid ${bgTab === 'color' ? 'var(--primary)' : '#ddd'}`,
+            background: bgTab === 'color' ? '#fff0f5' : 'white', cursor: 'pointer', fontSize: 11, fontWeight: bgTab === 'color' ? 'bold' : 'normal', color: bgTab === 'color' ? 'var(--primary)' : '#555',
+          }}
+        >🎨 カラー</button>
       </div>
 
       {bgTab === 'color' && (
         <>
           {/* パターン選択 */}
-          <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2, flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2, flexShrink: 0, justifyContent: 'center' }}>
             {PATTERN_DEFS.map(p => (
               <button
                 key={p.id}
@@ -870,7 +871,7 @@ function BgMenu({ canvasBg, setCanvasBg }: {
           )}
 
           {/* カラーパレット */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, overflowY: 'auto' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(13, 24px)', gap: 5, flexShrink: 0 }}>
             {PRESET_COLORS.map(c => (
               <button
                 key={c}
