@@ -153,6 +153,7 @@ interface CanvasItem {
   id: string;
   type: ItemType;
   content?: string;
+  originalImageUrl?: string; // トリミング前の元画像URL
   x: number;
   y: number;
   width: number;
@@ -1000,8 +1001,9 @@ export default function App() {
   };
 
   const confirmAndApply = (action: () => void) => {
-    if (templateSlots.length > 0 || items.length > 0) {
-      if (!window.confirm('写真枠の配置をやり直します。これまでの写真枠が消えてしまいますが実行しますか？')) return;
+    const hasPhotos = items.some(i => i.type === 'photo');
+    if (templateSlots.length > 0 || hasPhotos) {
+      if (!window.confirm('写真枠の配置をやり直します。これまでの写真だけ消えますが、スタンプ・テキストは残ります。実行しますか？')) return;
     }
     action();
   };
@@ -1010,7 +1012,7 @@ export default function App() {
     if (customSelected.length < 1) return;
     confirmAndApply(() => {
       pushHistory(items);
-      setItems([]);
+      setItems(prev => prev.filter(i => i.type !== 'photo'));
       setTemplateSlots(buildCustomSlots(customSelected));
       setCustomPicking(false);
       setCustomSelected([]);
@@ -1028,7 +1030,7 @@ export default function App() {
   const applyTemplate = (template: TemplateData) => {
     confirmAndApply(() => {
       pushHistory(items);
-      setItems([]);
+      setItems(prev => prev.filter(i => i.type !== 'photo'));
       setTemplateSlots(template.slots.map(s => ({ ...s })));
       if (template.bg) setCanvasBg(prev => ({ ...prev, color: template.bg! }));
     });
@@ -1041,11 +1043,18 @@ export default function App() {
     setCanvasBg({ color: '#fffbe6', color2: '#f26b9a', pattern: 'none', patternType: 'solid', gradientDir: 'to bottom', bgImage: undefined });
   };
 
+  // アップロード時の元画像URLを一時保持するref（クロップ完了時にCanvasItemへ渡す）
+  const pendingOriginalUrl = useRef<string | null>(null);
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => setCropImageUrl(ev.target?.result as string);
+    reader.onload = (ev) => {
+      const url = ev.target?.result as string;
+      pendingOriginalUrl.current = url; // 元画像を保存
+      setCropImageUrl(url);
+    };
     reader.readAsDataURL(file);
     e.target.value = '';
   };
@@ -1056,21 +1065,23 @@ export default function App() {
       : undefined;
 
     if (targetSlotId === '__replace__' && replaceTargetId) {
-      // 写真を差し替え（サイズ・位置・zIndexは維持）
+      // 写真を差し替え（サイズ・位置・zIndexは維持、元画像も更新）
+      const originalUrl = pendingOriginalUrl.current ?? undefined;
       pushHistory(items);
       setItems(prev => prev.map(i =>
         i.id === replaceTargetId
-          ? { ...i, content: croppedDataUrl, clipShape }
+          ? { ...i, content: croppedDataUrl, clipShape, ...(originalUrl ? { originalImageUrl: originalUrl } : {}) }
           : i
       ));
       setReplaceTargetId(null);
       setCropImageUrl(null);
       setTargetSlotId(null);
+      pendingOriginalUrl.current = null;
       return;
     }
 
     if (targetSlotId === '__retrim__' && retrimTargetId) {
-      // 同じ写真でトリミングやり直し
+      // スキミングやり直し（元画像URLはそのまま維持）
       pushHistory(items);
       setItems(prev => prev.map(i =>
         i.id === retrimTargetId
@@ -1080,8 +1091,11 @@ export default function App() {
       setRetrimTargetId(null);
       setCropImageUrl(null);
       setTargetSlotId(null);
+      pendingOriginalUrl.current = null;
       return;
     }
+
+    const originalUrl = pendingOriginalUrl.current ?? undefined;
 
     if (targetSlotId) {
       const slot = templateSlots.find(s => s.id === targetSlotId);
@@ -1091,6 +1105,7 @@ export default function App() {
           id: `photo-slot-${targetSlotId}-${Date.now()}`,
           type: 'photo',
           content: croppedDataUrl,
+          originalImageUrl: originalUrl, // 元画像を保存
           x: slot.x,
           y: slot.y,
           width: slot.width,
@@ -1104,10 +1119,11 @@ export default function App() {
         setTemplateSlots(prev => prev.filter(s => s.id !== targetSlotId));
       }
     } else {
-      addItem('photo', croppedDataUrl, { clipShape });
+      addItem('photo', croppedDataUrl, { clipShape, originalImageUrl: originalUrl });
     }
     setCropImageUrl(null);
     setTargetSlotId(null);
+    pendingOriginalUrl.current = null;
   };
 
   const saveAlbum = async () => {
@@ -1205,6 +1221,8 @@ export default function App() {
     reader.onload = (ev) => {
       const item = items.find(i => i.id === replaceTargetId);
       if (!item) return;
+      const url = ev.target?.result as string;
+      pendingOriginalUrl.current = url; // 差し替え時も元画像を保存
       // 元のアイテムのサイズ・形状でクロップモーダルを開く
       const ratio = item.width / item.height;
       let shape: typeof cropInitialShape = undefined;
@@ -1214,7 +1232,7 @@ export default function App() {
       else if (ratio < 0.85) shape = 'rectangle';
       else shape = 'square';
       setCropInitialShape(shape);
-      setCropImageUrl(ev.target?.result as string);
+      setCropImageUrl(url);
       setTargetSlotId('__replace__');
     };
     reader.readAsDataURL(file);
@@ -1234,7 +1252,8 @@ export default function App() {
     else if (ratio < 0.85) shape = 'rectangle';
     else shape = 'square';
     setCropInitialShape(shape);
-    setCropImageUrl(item.content);
+    // 元画像があればそちらを使う（より広い範囲でスキミングし直せる）
+    setCropImageUrl(item.originalImageUrl ?? item.content);
     setTargetSlotId('__retrim__');
   };
 
