@@ -774,7 +774,7 @@ function BgMenu({ canvasBg, setCanvasBg }: {
   setCanvasBg: React.Dispatch<React.SetStateAction<BgState>>;
 }) {
   const [colorTarget, setColorTarget] = useState<'primary' | 'secondary'>('primary');
-  const [bgTab, setBgTab] = useState<'color' | 'image'>('color');
+  const [bgTab, setBgTab] = useState<'color' | 'image'>('image');
 
   const currentColor = colorTarget === 'primary' ? canvasBg.color : canvasBg.color2;
   const setColor = (c: string) => {
@@ -784,7 +784,7 @@ function BgMenu({ canvasBg, setCanvasBg }: {
   const needsColor2 = canvasBg.patternType !== 'solid';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, height: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {/* タブ切替：背景画像 / カラー */}
       <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
         <button
@@ -793,7 +793,7 @@ function BgMenu({ canvasBg, setCanvasBg }: {
             flex: 1, padding: '3px 0', borderRadius: 6, border: `2px solid ${bgTab === 'image' ? 'var(--primary)' : '#ddd'}`,
             background: bgTab === 'image' ? '#fff0f5' : 'white', cursor: 'pointer', fontSize: 11, fontWeight: bgTab === 'image' ? 'bold' : 'normal', color: bgTab === 'image' ? 'var(--primary)' : '#555',
           }}
-        >🖼️ 背景画像</button>
+        >🖼️ イラスト</button>
         <button
           onClick={() => setBgTab('color')}
           style={{
@@ -871,7 +871,7 @@ function BgMenu({ canvasBg, setCanvasBg }: {
           )}
 
           {/* カラーパレット */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(13, 24px)', gap: 5, flexShrink: 0 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(13, 24px)', gap: 5, flexShrink: 0, justifyContent: 'center' }}>
             {PRESET_COLORS.map(c => (
               <button
                 key={c}
