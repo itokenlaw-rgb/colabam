@@ -933,6 +933,7 @@ export default function App() {
 
   // 写真サブメニュー用state
   const [photoSubMenuId, setPhotoSubMenuId] = useState<string | null>(null);
+  const [photoSubMenuPos, setPhotoSubMenuPos] = useState<{ x: number; y: number } | null>(null);
   const [replaceTargetId, setReplaceTargetId] = useState<string | null>(null);
   const [retrimTargetId, setRetrimTargetId] = useState<string | null>(null);
 
@@ -1199,6 +1200,7 @@ export default function App() {
     setItems(prev => prev.filter(i => i.id !== id));
     setSelectedId(null);
     setPhotoSubMenuId(null);
+    setPhotoSubMenuPos(null);
   };
 
   const handleBringToFront = (id: string) => {
@@ -1206,17 +1208,20 @@ export default function App() {
     maxZIndex.current = maxZ;
     setItems(prev => prev.map(i => i.id === id ? { ...i, zIndex: maxZ } : i));
     setPhotoSubMenuId(null);
+    setPhotoSubMenuPos(null);
   };
 
   const handleSendToBack = (id: string) => {
     const minZ = Math.min(...items.map(i => i.zIndex)) - 1;
     setItems(prev => prev.map(i => i.id === id ? { ...i, zIndex: minZ } : i));
     setPhotoSubMenuId(null);
+    setPhotoSubMenuPos(null);
   };
 
   const handleReplacePhoto = (id: string) => {
     setReplaceTargetId(id);
     setPhotoSubMenuId(null);
+    setPhotoSubMenuPos(null);
     document.getElementById('photo-replace-upload')?.click();
   };
 
@@ -1250,6 +1255,7 @@ export default function App() {
     if (!item || !item.content) return;
     setRetrimTargetId(id);
     setPhotoSubMenuId(null);
+    setPhotoSubMenuPos(null);
     const ratio = item.width / item.height;
     let shape: typeof cropInitialShape = undefined;
     if (item.clipShape === 'heart') shape = 'heart';
@@ -1543,7 +1549,7 @@ export default function App() {
         </button>
       </header>
 
-      <main className="canvas-area" onClick={() => { setSelectedId(null); setPhotoSubMenuId(null); setActiveMainTab(null); setShowPhotoAddMenu(false); }}>
+      <main className="canvas-area" onClick={() => { setSelectedId(null); setPhotoSubMenuId(null); setPhotoSubMenuPos(null); setActiveMainTab(null); setShowPhotoAddMenu(false); }}>
         <div
           ref={canvasRef}
           className="album-canvas"
@@ -1634,9 +1640,24 @@ export default function App() {
                     e.stopPropagation();
                     setSelectedId(item.id);
                     if (item.type === 'photo') {
-                      setPhotoSubMenuId(prev => prev === item.id ? null : item.id);
+                      if (photoSubMenuId === item.id) {
+                        setPhotoSubMenuId(null);
+                        setPhotoSubMenuPos(null);
+                      } else {
+                        setPhotoSubMenuId(item.id);
+                        // キャンバスの画面上の位置を取得してサブメニュー位置を計算
+                        const canvasEl = canvasRef.current;
+                        if (canvasEl) {
+                          const canvasRect = canvasEl.getBoundingClientRect();
+                          // アイテムの中心をスクリーン座標で計算
+                          const menuX = canvasRect.left + item.x + item.width / 2;
+                          const menuY = canvasRect.top + item.y + item.height + 8;
+                          setPhotoSubMenuPos({ x: menuX, y: menuY });
+                        }
+                      }
                     } else {
                       setPhotoSubMenuId(null);
+                      setPhotoSubMenuPos(null);
                     }
                   }}
                 >
@@ -1695,76 +1716,7 @@ export default function App() {
                   </button>
                 )}
 
-                {/* 写真サブメニュー */}
-                {isSelected && item.type === 'photo' && photoSubMenuId === item.id && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      left: 0,
-                      top: item.height + 6,
-                      zIndex: 9999,
-                      background: 'rgba(30,30,30,0.93)',
-                      borderRadius: 10,
-                      boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
-                      overflow: 'hidden',
-                      minWidth: 160,
-                      transform: `rotate(${-item.rotation}deg)`,
-                    }}
-                    onClick={e => e.stopPropagation()}
-                    onPointerDown={e => e.stopPropagation()}
-                  >
-                    {[
-                      {
-                        label: '前面へ',
-                        icon: '⬆',
-                        desc: '最前面に移動',
-                        onClick: () => handleBringToFront(item.id),
-                      },
-                      {
-                        label: '背面へ',
-                        icon: '⬇',
-                        desc: '最背面に移動',
-                        onClick: () => handleSendToBack(item.id),
-                      },
-                      {
-                        label: 'スキミングする',
-                        icon: '✂️',
-                        desc: 'トリミングやり直し',
-                        onClick: () => handleRetrimPhoto(item.id),
-                      },
-                      {
-                        label: '写真を変更する',
-                        icon: '🔄',
-                        desc: '別の写真に差し替え',
-                        onClick: () => handleReplacePhoto(item.id),
-                      },
-                    ].map((action, idx, arr) => (
-                      <button
-                        key={action.label}
-                        onPointerDown={e => e.stopPropagation()}
-                        onClick={(e) => { e.stopPropagation(); action.onClick(); }}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 10,
-                          width: '100%',
-                          padding: '10px 14px',
-                          background: 'transparent',
-                          border: 'none',
-                          borderBottom: idx < arr.length - 1 ? '1px solid rgba(255,255,255,0.1)' : 'none',
-                          color: '#fff',
-                          fontSize: 13,
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                        }}
-                      >
-                        <span style={{ fontSize: 16, minWidth: 22 }}>{action.icon}</span>
-                        <span style={{ flex: 1 }}>{action.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
+                {/* 写真サブメニュー: position:fixed のオーバーレイとして外部で描画するため、ここでは不要 */}
 
                 {isSelected && (
                   <RotateHandle
@@ -1782,6 +1734,70 @@ export default function App() {
           })}
         </div>
       </main>
+
+      {/* 写真サブメニュー: position:fixed オーバーレイ（背面・画面端でも必ず表示） */}
+      {photoSubMenuId && photoSubMenuPos && (() => {
+        const subItem = items.find(i => i.id === photoSubMenuId);
+        if (!subItem) return null;
+        // 画面下端からはみ出ないよう補正
+        const MENU_H = 4 * 44; // 4項目 × 約44px
+        const winH = window.innerHeight;
+        const top = photoSubMenuPos.y + MENU_H > winH - 60
+          ? photoSubMenuPos.y - MENU_H - subItem.height - 16
+          : photoSubMenuPos.y;
+        const left = Math.min(Math.max(photoSubMenuPos.x - 100, 8), window.innerWidth - 216);
+        return (
+          <div
+            style={{
+              position: 'fixed',
+              top,
+              left,
+              zIndex: 99999,
+              background: 'rgba(30,30,30,0.95)',
+              borderRadius: 12,
+              boxShadow: '0 6px 24px rgba(0,0,0,0.45)',
+              overflow: 'hidden',
+              minWidth: 200,
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+              border: '1px solid rgba(255,255,255,0.08)',
+            }}
+            onClick={e => e.stopPropagation()}
+            onPointerDown={e => e.stopPropagation()}
+          >
+            {[
+              { label: '前面へ',      icon: '⬆', onClick: () => { handleBringToFront(subItem.id); setPhotoSubMenuId(null); setPhotoSubMenuPos(null); } },
+              { label: '背面へ',      icon: '⬇', onClick: () => { handleSendToBack(subItem.id);   setPhotoSubMenuId(null); setPhotoSubMenuPos(null); } },
+              { label: 'スキミングする', icon: '✂️', onClick: () => { handleRetrimPhoto(subItem.id);  setPhotoSubMenuId(null); setPhotoSubMenuPos(null); } },
+              { label: '写真を変更する', icon: '🔄', onClick: () => { handleReplacePhoto(subItem.id); setPhotoSubMenuId(null); setPhotoSubMenuPos(null); } },
+            ].map((action, idx, arr) => (
+              <button
+                key={action.label}
+                onPointerDown={e => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); action.onClick(); }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  width: '100%',
+                  padding: '11px 16px',
+                  background: 'transparent',
+                  border: 'none',
+                  borderBottom: idx < arr.length - 1 ? '1px solid rgba(255,255,255,0.1)' : 'none',
+                  color: '#fff',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                <span style={{ fontSize: 16, minWidth: 22 }}>{action.icon}</span>
+                <span style={{ flex: 1 }}>{action.label}</span>
+              </button>
+            ))}
+          </div>
+        );
+      })()}
 
       <nav className="bottom-menu">
         {activeMainTab !== null && (
@@ -1801,10 +1817,11 @@ export default function App() {
           <button className={`tab-btn ${activeMainTab === 'background' ? 'active' : ''}`} onClick={() => handleTabToggle('background')}>
             <Grid size={20} /><span>背景変更</span>
           </button>
-          <div style={{ position: 'relative' }} ref={photoAddMenuRef}>
+          <div style={{ position: 'relative', display: 'contents' }} ref={photoAddMenuRef}>
             <button
               className={`tab-btn ${showPhotoAddMenu ? 'active' : ''}`}
               onClick={(e) => { e.stopPropagation(); setShowPhotoAddMenu(prev => !prev); setActiveMainTab(null); }}
+              style={{ position: 'relative' }}
             >
               <ImagePlus size={20} /><span>写真追加</span>
             </button>
@@ -1812,11 +1829,10 @@ export default function App() {
               <div
                 onClick={e => e.stopPropagation()}
                 style={{
-                  position: 'absolute',
-                  bottom: '100%',
+                  position: 'fixed',
+                  bottom: 70,
                   left: '50%',
                   transform: 'translateX(-50%)',
-                  marginBottom: 8,
                   background: 'rgba(30,30,30,0.96)',
                   borderRadius: 12,
                   boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
