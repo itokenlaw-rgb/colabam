@@ -946,14 +946,46 @@ export default function App() {
 
   const addItem = (type: ItemType, content?: string, extra?: Partial<CanvasItem>) => {
     maxZIndex.current += 1;
+
+    const defaultW = type === 'text' ? 200 : type === 'stamp' ? 320 : 120;
+    const defaultH = type === 'text' ? 60 : type === 'stamp' ? 95 : 120;
+    const w = extra?.width ?? defaultW;
+    const h = extra?.height ?? defaultH;
+
+    // スタンプはキャンバス中央上部に配置（画像の添付例に合わせた位置）
+    // 既にスタンプがその付近にある場合は少し下にずらす
+    const STAGGER_STEP = 30; // ずらす量(px)
+    const BASE_Y_STAMP = Math.round(CANVAS_H * 0.12); // キャンバス高さの12%（上寄り中央）
+
+    let defaultX = 50;
+    let defaultY = 50;
+
+    if (type === 'stamp') {
+      defaultX = Math.round((CANVAS_W - w) / 2);
+      defaultY = BASE_Y_STAMP;
+
+      // 既存スタンプがこの付近にある場合、重ならないようにずらす
+      const THRESHOLD = 40;
+      let staggerCount = 0;
+      for (const existing of items) {
+        if (existing.type === 'stamp') {
+          const targetY = BASE_Y_STAMP + staggerCount * STAGGER_STEP;
+          if (Math.abs(existing.y - targetY) < THRESHOLD && Math.abs(existing.x - defaultX) < THRESHOLD) {
+            staggerCount += 1;
+          }
+        }
+      }
+      defaultY = BASE_Y_STAMP + staggerCount * STAGGER_STEP;
+    }
+
     const newItem: CanvasItem = {
       id: `${type}-${Date.now()}`,
       type,
       content,
-      x: 50,
-      y: 50,
-      width: type === 'text' ? 200 : type === 'stamp' ? 320 : 120,
-      height: type === 'text' ? 60 : type === 'stamp' ? 95 : 120,
+      x: defaultX,
+      y: defaultY,
+      width: w,
+      height: h,
       rotation: 0,
       zIndex: maxZIndex.current,
       ...extra,
@@ -1394,6 +1426,32 @@ export default function App() {
                 enableResizing={isSelected ? undefined : false}
                 resizeHandleStyles={isSelected ? {
                   bottomRight: { display: 'none' },
+                } : {}}
+                resizeHandleComponent={isSelected ? {
+                  topLeft: (
+                    <div
+                      style={{
+                        width: 22,
+                        height: 22,
+                        background: 'rgba(255,255,255,0.95)',
+                        border: '2px solid #f26b9a',
+                        borderRadius: 4,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'nw-resize',
+                        boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
+                        position: 'absolute',
+                        top: -2,
+                        left: -2,
+                      }}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                        <path d="M2 10 L2 2 L10 2" stroke="#f26b9a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M2 2 L6 6" stroke="#f26b9a" strokeWidth="1.5" strokeLinecap="round" opacity="0.5"/>
+                      </svg>
+                    </div>
+                  ),
                 } : {}}
               >
                 <div
