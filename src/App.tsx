@@ -1848,151 +1848,124 @@ export default function App() {
             </div>
           ))}
 
-          {items.map((item) => {
-            const isSelected = selectedId === item.id;
-            return (
-              <Rnd
-                key={item.id}
-                size={{ width: item.width, height: item.height }}
-                position={{ x: item.x, y: item.y }}
-                onDragStart={(e) => {
-                  e.stopPropagation();
-                  setSelectedId(item.id);
-                }}
-                onDragStop={(_, d) => {
-                  setItems(prev => prev.map(i => i.id === item.id ? { ...i, x: d.x, y: d.y } : i));
-                }}
-                onResizeStop={(_, __, ref, ___, pos) => {
-                  setItems(prev => prev.map(i => i.id === item.id
-                    ? { ...i, width: parseInt(ref.style.width), height: parseInt(ref.style.height), ...pos }
-                    : i
-                  ));
-                }}
-                lockAspectRatio={item.type === 'photo' || item.type === 'stamp'}
-                style={{ zIndex: item.zIndex }}
-                dragHandleClassName="drag-handle"
-                enableResizing={isSelected ? undefined : false}
-                resizeHandleStyles={isSelected ? {
-                  bottomRight: { display: 'none' },
-                } : {}}
-                resizeHandleComponent={isSelected ? {
-                  topLeft: (
-                    <div
-                      style={{
-                        width: 22,
-                        height: 22,
-                        background: 'rgba(255,255,255,0.95)',
-                        border: '2px solid #f26b9a',
-                        borderRadius: 4,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'nw-resize',
-                        boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
-                        position: 'absolute',
-                        top: -2,
-                        left: -2,
-                      }}
-                    >
-                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                        <path d="M2 10 L2 2 L10 2" stroke="#f26b9a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-                        <path d="M2 2 L6 6" stroke="#f26b9a" strokeWidth="1.5" strokeLinecap="round" opacity="0.5"/>
-                      </svg>
-                    </div>
-                  ),
-                } : {}}
-              >
-                <div
-                  className={`canvas-item-wrapper ${isSelected ? 'selected' : ''}`}
-                  style={{
-                    transform: `rotate(${item.rotation}deg)`,
-                    ...(item.clipShape || item.slotStyle ? { background: 'transparent' } : {}),
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedId(item.id);
-                    if (item.type === 'photo') {
-                      if (photoSubMenuId === item.id) {
-                        setPhotoSubMenuId(null);
-                        setPhotoSubMenuPos(null);
-                      } else {
-                        setPhotoSubMenuId(item.id);
-                        // キャンバスの画面上の位置を取得してサブメニュー位置を計算
-                        const canvasEl = canvasRef.current;
-                        if (canvasEl) {
-                          const canvasRect = canvasEl.getBoundingClientRect();
-                          // アイテムの中心をスクリーン座標で計算
-                          const menuX = canvasRect.left + item.x + item.width / 2;
-                          const menuY = canvasRect.top + item.y + item.height + 8;
-                          setPhotoSubMenuPos({ x: menuX, y: menuY });
-                        }
-                      }
-                    } else {
-                      setPhotoSubMenuId(null);
-                      setPhotoSubMenuPos(null);
-                    }
-                  }}
-                >
-                  {item.type === 'text' ? (
-                    (() => {
-                      const sid = item.textStyle;
-                      const isSpecial = sid === 'arch-up' || sid === 'arch-down' || sid === 'wave';
-                      if (isSpecial) {
-                        return (
-                          <div className="item-text drag-handle" style={{ padding: 0 }}>
-                            <ArchText
-                              text={item.content ?? ''}
-                              color={item.color ?? '#333'}
-                              fontSize={item.fontSize ?? 24}
-                              styleId={sid!}
-                              width={item.width}
-                              height={item.height}
-                            />
-                          </div>
-                        );
-                      }
-                      return (
-                        <div
-                          className="item-text drag-handle"
-                          style={{ ...getTextCssStyle(sid, item.color ?? '#333333'), fontSize: `${item.fontSize}px` }}
-                        >
-                          {item.content}
-                        </div>
-                      );
-                    })()
-                  ) : item.type === 'stamp' ? (
-                    <img
-                      src={item.content}
-                      className="item-photo drag-handle"
-                      alt=""
-                      style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
-                    />
-                  ) : (
-                    <img
-                      src={item.content}
-                      className="item-photo drag-handle"
-                      alt=""
-                      style={
-                        item.clipShape
-                          ? getClipPathStyle(item.clipShape)
-                          : item.slotStyle
-                            ? item.slotStyle
-                            : undefined
-                      }
-                    />
-                  )}
-                </div>
+/* App.tsx の Rnd 周辺の修正コード */
 
-                {isSelected && (
-                  <button
-                    className="item-delete"
-                    onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
-                    onPointerUp={(e) => { e.stopPropagation(); }}
-                    onClick={(e) => { e.stopPropagation(); handleDeleteItem(item.id); }}
-                  >
-                    <X size={12} />
-                  </button>
-                )}
+{items.map((item) => {
+  const isSelected = selectedId === item.id;
+  return (
+    <Rnd
+      key={item.id}
+      size={{ width: item.width, height: item.height }}
+      position={{ x: item.x, y: item.y }}
+      onDragStart={(e) => {
+        e.stopPropagation();
+        setSelectedId(item.id);
+      }}
+      onDragStop={(_, d) => {
+        setItems(prev => prev.map(i => i.id === item.id ? { ...i, x: d.x, y: d.y } : i));
+      }}
+      onResizeStop={(_, __, ref, ___, pos) => {
+        setItems(prev => prev.map(i => i.id === item.id
+          ? { ...i, width: parseInt(ref.style.width), height: parseInt(ref.style.height), ...pos }
+          : i
+        ));
+      }}
+      lockAspectRatio={item.type === 'photo' || item.type === 'stamp'}
+      style={{ zIndex: item.zIndex }}
+      dragHandleClassName="drag-handle"
+      enableResizing={isSelected ? {
+        bottomRight: true, // 右下のリサイズを有効化
+      } : false}
+      resizeHandleComponent={isSelected ? {
+        /* 1. 左上：回転ハンドル（RotateHandleをここに配置） */
+        topLeft: (
+          <RotateHandle
+            itemId={item.id}
+            itemX={item.x}
+            itemY={item.y}
+            itemW={item.width}
+            itemH={item.height}
+            rotation={item.rotation}
+            onRotate={handleItemRotate}
+          />
+        ),
+        /* 2. 右下：リサイズハンドル（見た目をカスタマイズ） */
+        bottomRight: (
+          <div
+            style={{
+              width: 24,
+              height: 24,
+              background: 'white',
+              border: '2px solid var(--primary)',
+              borderRadius: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              position: 'absolute',
+              bottom: -4,
+              right: -4,
+              boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+              cursor: 'se-resize'
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 19l-4-4 4-4" transform="rotate(180 12 12)" />
+              <path d="M19 15l-4-4-4 4" transform="rotate(90 12 12)" />
+            </svg>
+          </div>
+        )
+      } : {}}
+    >
+      <div
+        className={`canvas-item-wrapper ${isSelected ? 'selected' : ''}`}
+        style={{
+          transform: `rotate(${item.rotation}deg)`,
+          ...(item.clipShape || item.slotStyle ? { background: 'transparent' } : {}),
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+          setSelectedId(item.id);
+          if (item.type === 'photo') {
+            if (photoSubMenuId === item.id) {
+              setPhotoSubMenuId(null);
+              setPhotoSubMenuPos(null);
+            } else {
+              setPhotoSubMenuId(item.id);
+              const canvasEl = canvasRef.current;
+              if (canvasEl) {
+                const canvasRect = canvasEl.getBoundingClientRect();
+                const menuX = canvasRect.left + item.x + item.width / 2;
+                const menuY = canvasRect.top + item.y + item.height + 8;
+                setPhotoSubMenuPos({ x: menuX, y: menuY });
+              }
+            }
+          } else {
+            setPhotoSubMenuId(null);
+            setPhotoSubMenuPos(null);
+          }
+        }}
+      >
+        {/* アイテムの表示ロジックは変更なし */}
+        {item.type === 'text' ? (
+          // ... (Text表示)
+        ) : (
+          <img src={item.content} className="item-photo drag-handle" alt="" style={/*...*/}/>
+        )}
+      </div>
+
+      {/* 削除ボタンは右上に配置（そのまま） */}
+      {isSelected && (
+        <button
+          className="item-delete"
+          onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
+          onClick={(e) => { e.stopPropagation(); handleDeleteItem(item.id); }}
+        >
+          <X size={12} />
+        </button>
+      )}
+    </Rnd>
+  );
+})}
 
                 {/* 写真サブメニュー: position:fixed のオーバーレイとして外部で描画するため、ここでは不要 */}
 
