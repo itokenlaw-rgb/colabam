@@ -1157,6 +1157,10 @@ export default function App() {
   const [replaceTargetId, setReplaceTargetId] = useState<string | null>(null);
   const [retrimTargetId, setRetrimTargetId] = useState<string | null>(null);
 
+  // スタンプ・テキストサブメニュー用state
+  const [itemSubMenuId, setItemSubMenuId] = useState<string | null>(null);
+  const [itemSubMenuPos, setItemSubMenuPos] = useState<{ x: number; y: number } | null>(null);
+
   // 写真ストック（複数枚事前選択）
   const [photoStock, setPhotoStock] = useState<StockPhoto[]>([]);
   // 写真追加サブメニューの表示
@@ -1429,6 +1433,8 @@ export default function App() {
     setSelectedId(null);
     setPhotoSubMenuId(null);
     setPhotoSubMenuPos(null);
+    setItemSubMenuId(null);
+    setItemSubMenuPos(null);
   };
 
   const handleBringToFront = (id: string) => {
@@ -1437,6 +1443,8 @@ export default function App() {
     setItems(prev => prev.map(i => i.id === id ? { ...i, zIndex: maxZ } : i));
     setPhotoSubMenuId(null);
     setPhotoSubMenuPos(null);
+    setItemSubMenuId(null);
+    setItemSubMenuPos(null);
   };
 
   const handleSendToBack = (id: string) => {
@@ -1444,6 +1452,8 @@ export default function App() {
     setItems(prev => prev.map(i => i.id === id ? { ...i, zIndex: minZ } : i));
     setPhotoSubMenuId(null);
     setPhotoSubMenuPos(null);
+    setItemSubMenuId(null);
+    setItemSubMenuPos(null);
   };
 
   const handleReplacePhoto = (id: string) => {
@@ -1812,7 +1822,7 @@ export default function App() {
         </button>
       </header>
 
-      <main className="canvas-area" onClick={() => { setSelectedId(null); setPhotoSubMenuId(null); setPhotoSubMenuPos(null); setActiveMainTab(null); setShowPhotoAddMenu(false); }}>
+      <main className="canvas-area" onClick={() => { setSelectedId(null); setPhotoSubMenuId(null); setPhotoSubMenuPos(null); setItemSubMenuId(null); setItemSubMenuPos(null); setActiveMainTab(null); setShowPhotoAddMenu(false); }}>
         <div
           ref={canvasRef}
           className="album-canvas"
@@ -1858,6 +1868,10 @@ export default function App() {
                 onDragStart={(e) => {
                   e.stopPropagation();
                   setSelectedId(item.id);
+                  setPhotoSubMenuId(null);
+                  setPhotoSubMenuPos(null);
+                  setItemSubMenuId(null);
+                  setItemSubMenuPos(null);
                 }}
                 onDragStop={(_, d) => {
                   setItems(prev => prev.map(i => i.id === item.id ? { ...i, x: d.x, y: d.y } : i));
@@ -1908,28 +1922,43 @@ export default function App() {
                     transform: `rotate(${item.rotation}deg)`,
                     ...(item.clipShape || item.slotStyle ? { background: 'transparent' } : {}),
                   }}
+                  onPointerDown={(e) => { e.stopPropagation(); }}
                   onClick={(e) => {
                     e.stopPropagation();
                     setSelectedId(item.id);
+                    const canvasEl = canvasRef.current;
+                    const getMenuPos = () => {
+                      if (!canvasEl) return null;
+                      const canvasRect = canvasEl.getBoundingClientRect();
+                      const menuX = canvasRect.left + item.x + item.width / 2;
+                      const menuY = canvasRect.top + item.y + item.height + 8;
+                      return { x: menuX, y: menuY };
+                    };
                     if (item.type === 'photo') {
                       if (photoSubMenuId === item.id) {
                         setPhotoSubMenuId(null);
                         setPhotoSubMenuPos(null);
                       } else {
+                        setItemSubMenuId(null);
+                        setItemSubMenuPos(null);
                         setPhotoSubMenuId(item.id);
-                        // キャンバスの画面上の位置を取得してサブメニュー位置を計算
-                        const canvasEl = canvasRef.current;
-                        if (canvasEl) {
-                          const canvasRect = canvasEl.getBoundingClientRect();
-                          // アイテムの中心をスクリーン座標で計算
-                          const menuX = canvasRect.left + item.x + item.width / 2;
-                          const menuY = canvasRect.top + item.y + item.height + 8;
-                          setPhotoSubMenuPos({ x: menuX, y: menuY });
-                        }
+                        setPhotoSubMenuPos(getMenuPos());
+                      }
+                    } else if (item.type === 'stamp' || item.type === 'text') {
+                      if (itemSubMenuId === item.id) {
+                        setItemSubMenuId(null);
+                        setItemSubMenuPos(null);
+                      } else {
+                        setPhotoSubMenuId(null);
+                        setPhotoSubMenuPos(null);
+                        setItemSubMenuId(item.id);
+                        setItemSubMenuPos(getMenuPos());
                       }
                     } else {
                       setPhotoSubMenuId(null);
                       setPhotoSubMenuPos(null);
+                      setItemSubMenuId(null);
+                      setItemSubMenuPos(null);
                     }
                   }}
                 >
@@ -2039,6 +2068,7 @@ export default function App() {
               backdropFilter: 'blur(8px)',
               WebkitBackdropFilter: 'blur(8px)',
               border: '1px solid rgba(255,255,255,0.08)',
+              touchAction: 'manipulation',
             }}
             onClick={e => e.stopPropagation()}
             onPointerDown={e => e.stopPropagation()}
@@ -2067,6 +2097,72 @@ export default function App() {
                   fontWeight: 600,
                   cursor: 'pointer',
                   textAlign: 'left',
+                  touchAction: 'manipulation',
+                  WebkitTapHighlightColor: 'transparent',
+                }}
+              >
+                <span style={{ fontSize: 16, minWidth: 22 }}>{action.icon}</span>
+                <span style={{ flex: 1 }}>{action.label}</span>
+              </button>
+            ))}
+          </div>
+        );
+      })()}
+
+      {/* スタンプ・テキストサブメニュー: position:fixed オーバーレイ */}
+      {itemSubMenuId && itemSubMenuPos && (() => {
+        const subItem = items.find(i => i.id === itemSubMenuId);
+        if (!subItem) return null;
+        const MENU_H = 2 * 44;
+        const winH = window.innerHeight;
+        const top = itemSubMenuPos.y + MENU_H > winH - 60
+          ? itemSubMenuPos.y - MENU_H - subItem.height - 16
+          : itemSubMenuPos.y;
+        const left = Math.min(Math.max(itemSubMenuPos.x - 100, 8), window.innerWidth - 216);
+        return (
+          <div
+            style={{
+              position: 'fixed',
+              top,
+              left,
+              zIndex: 99999,
+              background: 'rgba(30,30,30,0.95)',
+              borderRadius: 12,
+              boxShadow: '0 6px 24px rgba(0,0,0,0.45)',
+              overflow: 'hidden',
+              minWidth: 200,
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              touchAction: 'manipulation',
+            }}
+            onClick={e => e.stopPropagation()}
+            onPointerDown={e => e.stopPropagation()}
+          >
+            {[
+              { label: '前面へ', icon: '⬆', onClick: () => { handleBringToFront(subItem.id); setItemSubMenuId(null); setItemSubMenuPos(null); } },
+              { label: '背面へ', icon: '⬇', onClick: () => { handleSendToBack(subItem.id);   setItemSubMenuId(null); setItemSubMenuPos(null); } },
+            ].map((action, idx, arr) => (
+              <button
+                key={action.label}
+                onPointerDown={e => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); action.onClick(); }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  width: '100%',
+                  padding: '11px 16px',
+                  background: 'transparent',
+                  border: 'none',
+                  borderBottom: idx < arr.length - 1 ? '1px solid rgba(255,255,255,0.1)' : 'none',
+                  color: '#fff',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  touchAction: 'manipulation',
+                  WebkitTapHighlightColor: 'transparent',
                 }}
               >
                 <span style={{ fontSize: 16, minWidth: 22 }}>{action.icon}</span>
