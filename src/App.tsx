@@ -8,6 +8,93 @@ import {
 import CropModal from './CropModal';
 import './index.css';
 
+// ===== ストック写真の型 =====
+interface StockPhoto {
+  url: string;
+  takenAt: Date | null; // Exifから取得した撮影日時（取得できない場合はnull）
+  fileName: string;
+}
+
+// Exif から撮影日時を取得するユーティリティ
+function extractExifDate(file: File): Promise<Date | null> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const buf = e.target?.result as ArrayBuffer;
+        const view = new DataView(buf);
+        // JPEGマジックナンバー確認
+        if (view.getUint16(0) !== 0xFFD8) { resolve(null); return; }
+        let offset = 2;
+        while (offset < view.byteLength - 2) {
+          const marker = view.getUint16(offset);
+          offset += 2;
+          if (marker === 0xFFE1) { // APP1 (Exif)
+            offset += 2; // segLenの代わり。getUint16で2バイト分進んでいるためt);
+            const exifHeader = String.fromCharCode(
+              view.getUint8(offset + 2), view.getUint8(offset + 3),
+              view.getUint8(offset + 4), view.getUint8(offset + 5)
+            );
+            if (exifHeader !== 'Exif') { resolve(null); return; }
+            const tiffStart = offset + 8;
+            const byteOrder = view.getUint16(tiffStart);
+            const isLE = byteOrder === 0x4949;
+            const getU16 = (o: number) => isLE ? view.getUint16(o, true) : view.getUint16(o, false);
+            const getU32 = (o: number) => isLE ? view.getUint32(o, true) : view.getUint32(o, false);
+            const ifdOffset = getU32(tiffStart + 4);
+            const numEntries = getU16(tiffStart + ifdOffset);
+            for (let i = 0; i < numEntries; i++) {
+              const entryOffset = tiffStart + ifdOffset + 2 + i * 12;
+              const tag = getU16(entryOffset);
+              // 0x9003: DateTimeOriginal
+              if (tag === 0x9003 || tag === 0x0132) {
+                // type は取得しなくてOK
+                const count = getU32(entryOffset + 4);
+                const valueOffset = count > 4
+                  ? tiffStart + getU32(entryOffset + 8)
+                  : entryOffset + 8;
+                let dateStr = '';
+                for (let j = 0; j < Math.min(count - 1, 19); j++) {
+                  const ch = view.getUint8(valueOffset + j);
+                  if (ch === 0) break;
+                  dateStr += String.fromCharCode(ch);
+                }
+                // "2024:03:15 14:30:00" → Date
+                const m = dateStr.match(/^(\d{4}):(\d{2}):(\d{2})/);
+                if (m) {
+                  resolve(new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3])));
+                  return;
+                }
+              }
+            }
+            resolve(null); return;
+          } else {
+            const segLen = view.getUint16(offset);
+            offset += segLen;
+          }
+        }
+        resolve(null);
+      } catch { resolve(null); }
+    };
+    reader.onerror = () => resolve(null);
+    // 最初の64KBだけ読めばExifは十分
+    reader.readAsArrayBuffer(file.slice(0, 65536));
+  });
+}
+
+// ファイルをStockPhotoに変換
+async function fileToStockPhoto(file: File): Promise<StockPhoto> {
+  const [url, takenAt] = await Promise.all([
+    new Promise<string>(res => {
+      const r = new FileReader();
+      r.onload = e => res(e.target?.result as string);
+      r.readAsDataURL(file);
+    }),
+    extractExifDate(file),
+  ]);
+  return { url, takenAt, fileName: file.name };
+}
+
 // ===== Types =====
 type ItemType = 'photo' | 'stamp' | 'text';
 type MainTab = 'template' | 'stamp' | 'text' | 'background' | 'photo';
@@ -153,6 +240,7 @@ interface CanvasItem {
   id: string;
   type: ItemType;
   content?: string;
+  originalImageUrl?: string; // トリミング前の元画像URL
   x: number;
   y: number;
   width: number;
@@ -164,6 +252,7 @@ interface CanvasItem {
   clipShape?: ClipShape;
   textStyle?: TextStyleId;
   fontFamily?: string;
+  slotStyle?: React.CSSProperties; // 枠から引き継いだborderRadius/clipPath
 }
 
 // 3:4 キャンバスサイズ（表示用px）
@@ -412,9 +501,10 @@ interface RotateHandleProps {
   itemH: number;
   rotation: number;
   onRotate: (id: string, newRotation: number) => void;
+  position?: 'topLeft' | 'bottomRight';
 }
 
-function RotateHandle({ itemId, itemX, itemY, itemW, itemH, rotation, onRotate }: RotateHandleProps) {
+function RotateHandle({ itemId, itemX, itemY, itemW, itemH, rotation, onRotate, position = 'bottomRight' }: RotateHandleProps) {
   const isDragging = useRef(false);
   const startAngleOffset = useRef(0); // 追加：開始時の角度差分を保存
 
@@ -466,6 +556,7 @@ function RotateHandle({ itemId, itemX, itemY, itemW, itemH, rotation, onRotate }
       className="rotate-handle"
       onPointerDown={handlePointerDown}
       title="ドラッグで回転"
+      style={position === 'topLeft' ? { bottom: 'auto', right: 'auto', top: -14, left: -14 } : undefined}
     >
       {/* SVG内容はそのまま */}
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -483,9 +574,19 @@ type BgState = {
   patternType: string;
   gradientDir: string;
   bgImage?: string; // 背景画像URL（設定時はこちらが優先）
+  bgPhotoOpacity?: number; // 写真背景の不透明度 0〜1（1=そのまま, 0=白）
+  bgPhotoUrl?: string; // デバイス写真から選んだ背景URL
 };
 
 function getCanvasBgStyle(bg: BgState): React.CSSProperties {
+  if (bg.bgPhotoUrl) {
+    return {
+      backgroundImage: `url(${bg.bgPhotoUrl})`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      position: 'relative',
+    };
+  }
   if (bg.bgImage) {
     return {
       backgroundImage: `url(${bg.bgImage})`,
@@ -590,9 +691,10 @@ const GRAD_DIRS = [
 const PRESET_COLORS = [
   '#ffffff', '#f8bbd0', '#fce4ec', '#fff3e0', '#fffde7',
   '#e8f5e9', '#e3f2fd', '#ede7f6', '#ffd6e7', '#d1fae5',
-  '#f26b9a', '#e91e8c', '#ff6b6b', '#ffa726', '#ffee58',
-  '#66bb6a', '#26c6da', '#5c6bc0', '#ab47bc', '#8d6e63',
-  '#333333', '#555555', '#888888', '#bbbbbb', '#000000',
+  '#f26b9a', '#e91e8c', '#ff6b6b',
+  '#ffa726', '#ffee58', '#66bb6a', '#26c6da', '#5c6bc0',
+  '#ab47bc', '#8d6e63', '#333333', '#555555', '#888888',
+  '#bbbbbb', '#000000',
 ];
 
 // ===== 背景画像リスト =====
@@ -606,17 +708,17 @@ interface BgSeries {
 const BG_SERIES: BgSeries[] = [
   {
     id: 's1',
-    label: 'シリーズ1',
+    label: '水彩',
     files: Array.from({ length: 12 }, (_, i) => `/colabam_bimg${101 + i}.jpg`),
   },
   {
     id: 's2',
-    label: 'シリーズ2',
+    label: 'ポップ',
     files: Array.from({ length: 12 }, (_, i) => `/colabam_bimg${201 + i}.jpg`),
   },
   {
     id: 's3',
-    label: 'シリーズ3',
+    label: 'ｽﾀｲﾘｯｼｭ',
     files: Array.from({ length: 12 }, (_, i) => `/colabam_bimg${301 + i}.jpg`),
   },
 ];
@@ -632,23 +734,34 @@ interface StampCategoryDef {
 }
 
 const STAMP_CATEGORIES: StampCategoryDef[] = [
-  { id: 'with-bg', label: '背景あり' },
-  { id: 'no-bg',   label: '背景なし' },
+  { id: 'no-bg',   label: 'メッセージ' },
+  { id: 'with-bg', label: 'プレート' },
 ];
 
 // ファイルを追加するときはここに追記するだけでOK
+// 001〜012 と 101〜112 の2シリーズ（計24枚）に対応
 const STAMP_FILES: Record<StampCategory, string[]> = {
-  'with-bg': Array.from({ length: 12 }, (_, i) =>
-    `/stamps/with-bg/colabammojiimg${String(i + 1).padStart(3, '0')}.jpg`
-  ),
-  'no-bg': Array.from({ length: 12 }, (_, i) =>
-    `/stamps/no-bg/colabammojitouka${String(i + 1).padStart(3, '0')}.png`
-  ),
+  'no-bg': [
+    ...Array.from({ length: 12 }, (_, i) =>
+      `/stamps/no-bg/colabammojitouka${String(i + 1).padStart(3, '0')}.png`
+    ),
+    ...Array.from({ length: 12 }, (_, i) =>
+      `/stamps/no-bg/colabammojitouka${String(i + 101).padStart(3, '0')}.png`
+    ),
+  ],
+  'with-bg': [
+    ...Array.from({ length: 12 }, (_, i) =>
+      `/stamps/with-bg/colabammojiimg${String(i + 1).padStart(3, '0')}.jpg`
+    ),
+    ...Array.from({ length: 12 }, (_, i) =>
+      `/stamps/with-bg/colabammojiimg${String(i + 101).padStart(3, '0')}.jpg`
+    ),
+  ],
 };
 
 // ===== スタンプメニューコンポーネント =====
 function StampMenu({ onAdd }: { onAdd: (url: string) => void }) {
-  const [activeCategory, setActiveCategory] = useState<StampCategory>('with-bg');
+  const [activeCategory, setActiveCategory] = useState<StampCategory>('no-bg');
   const files = STAMP_FILES[activeCategory];
 
   return (
@@ -680,7 +793,7 @@ function StampMenu({ onAdd }: { onAdd: (url: string) => void }) {
           </code>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, overflowY: 'auto', paddingBottom: 4 }}>
+        <div style={{ display: 'flex', flexWrap: 'nowrap', gap: 8, overflowX: 'auto', overflowY: 'hidden', paddingBottom: 4 }}>
           {files.map((src, i) => (
             <button
               key={src}
@@ -773,19 +886,41 @@ function BgMenu({ canvasBg, setCanvasBg }: {
   setCanvasBg: React.Dispatch<React.SetStateAction<BgState>>;
 }) {
   const [colorTarget, setColorTarget] = useState<'primary' | 'secondary'>('primary');
-  const [bgTab, setBgTab] = useState<'color' | 'image'>('color');
+  const [bgTab, setBgTab] = useState<'color' | 'image' | 'photo'>('image');
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const currentColor = colorTarget === 'primary' ? canvasBg.color : canvasBg.color2;
   const setColor = (c: string) => {
-    setCanvasBg(prev => colorTarget === 'primary' ? { ...prev, color: c, bgImage: undefined } : { ...prev, color2: c });
+    setCanvasBg(prev => colorTarget === 'primary' ? { ...prev, color: c, bgImage: undefined, bgPhotoUrl: undefined } : { ...prev, color2: c });
   };
 
   const needsColor2 = canvasBg.patternType !== 'solid';
 
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const url = ev.target?.result as string;
+      setCanvasBg(prev => ({ ...prev, bgPhotoUrl: url, bgImage: undefined, bgPhotoOpacity: prev.bgPhotoOpacity ?? 1 }));
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const opacity = canvasBg.bgPhotoOpacity ?? 1;
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, height: '100%' }}>
-      {/* タブ切替：カラー / 背景画像 */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {/* タブ切替：背景画像 / カラー / 写真から選ぶ */}
       <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+        <button
+          onClick={() => setBgTab('image')}
+          style={{
+            flex: 1, padding: '3px 0', borderRadius: 6, border: `2px solid ${bgTab === 'image' ? 'var(--primary)' : '#ddd'}`,
+            background: bgTab === 'image' ? '#fff0f5' : 'white', cursor: 'pointer', fontSize: 11, fontWeight: bgTab === 'image' ? 'bold' : 'normal', color: bgTab === 'image' ? 'var(--primary)' : '#555',
+          }}
+        >🖼️ イラスト</button>
         <button
           onClick={() => setBgTab('color')}
           style={{
@@ -794,26 +929,26 @@ function BgMenu({ canvasBg, setCanvasBg }: {
           }}
         >🎨 カラー</button>
         <button
-          onClick={() => setBgTab('image')}
+          onClick={() => setBgTab('photo')}
           style={{
-            flex: 1, padding: '3px 0', borderRadius: 6, border: `2px solid ${bgTab === 'image' ? 'var(--primary)' : '#ddd'}`,
-            background: bgTab === 'image' ? '#fff0f5' : 'white', cursor: 'pointer', fontSize: 11, fontWeight: bgTab === 'image' ? 'bold' : 'normal', color: bgTab === 'image' ? 'var(--primary)' : '#555',
+            flex: 1, padding: '3px 0', borderRadius: 6, border: `2px solid ${bgTab === 'photo' ? 'var(--primary)' : '#ddd'}`,
+            background: bgTab === 'photo' ? '#fff0f5' : 'white', cursor: 'pointer', fontSize: 11, fontWeight: bgTab === 'photo' ? 'bold' : 'normal', color: bgTab === 'photo' ? 'var(--primary)' : '#555',
           }}
-        >🖼️ 背景画像</button>
+        >📷 写真</button>
       </div>
 
       {bgTab === 'color' && (
         <>
           {/* パターン選択 */}
-          <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2, flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2, flexShrink: 0, justifyContent: 'center' }}>
             {PATTERN_DEFS.map(p => (
               <button
                 key={p.id}
-                onClick={() => setCanvasBg(prev => ({ ...prev, patternType: p.id, pattern: 'none', bgImage: undefined }))}
+                onClick={() => setCanvasBg(prev => ({ ...prev, patternType: p.id, pattern: 'none', bgImage: undefined, bgPhotoUrl: undefined }))}
                 style={{
                   display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-                  border: `2px solid ${canvasBg.patternType === p.id && !canvasBg.bgImage ? 'var(--primary)' : '#ddd'}`,
-                  borderRadius: 8, background: canvasBg.patternType === p.id && !canvasBg.bgImage ? '#fff0f5' : 'white',
+                  border: `2px solid ${canvasBg.patternType === p.id && !canvasBg.bgImage && !canvasBg.bgPhotoUrl ? 'var(--primary)' : '#ddd'}`,
+                  borderRadius: 8, background: canvasBg.patternType === p.id && !canvasBg.bgImage && !canvasBg.bgPhotoUrl ? '#fff0f5' : 'white',
                   padding: '3px 6px', cursor: 'pointer', minWidth: 40, flexShrink: 0,
                 }}
               >
@@ -870,7 +1005,7 @@ function BgMenu({ canvasBg, setCanvasBg }: {
           )}
 
           {/* カラーパレット */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, overflowY: 'auto' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(13, 24px)', gap: 5, flexShrink: 0, justifyContent: 'center' }}>
             {PRESET_COLORS.map(c => (
               <button
                 key={c}
@@ -896,6 +1031,93 @@ function BgMenu({ canvasBg, setCanvasBg }: {
       {bgTab === 'image' && (
         <ImageBgTab canvasBg={canvasBg} setCanvasBg={setCanvasBg} />
       )}
+
+      {bgTab === 'photo' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {/* 写真選択ボタン */}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              onClick={() => photoInputRef.current?.click()}
+              style={{
+                flex: 1, padding: '8px 12px', borderRadius: 8,
+                border: '2px dashed var(--primary)', background: '#fff0f5',
+                color: 'var(--primary)', fontSize: 12, fontWeight: 'bold',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}
+            >
+              <span style={{ fontSize: 16 }}>📷</span>
+              {canvasBg.bgPhotoUrl ? '写真を変更する' : 'デバイスから写真を選ぶ'}
+            </button>
+            {canvasBg.bgPhotoUrl && (
+              <button
+                onClick={() => setCanvasBg(prev => ({ ...prev, bgPhotoUrl: undefined }))}
+                style={{
+                  padding: '8px 10px', borderRadius: 8, border: '1px solid #ddd',
+                  background: 'white', color: '#888', fontSize: 11, cursor: 'pointer',
+                }}
+              >✕ 解除</button>
+            )}
+          </div>
+
+          {/* プレビューサムネイル */}
+          {canvasBg.bgPhotoUrl && (
+            <div style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid #eee', height: 60, position: 'relative', flexShrink: 0 }}>
+              <img
+                src={canvasBg.bgPhotoUrl}
+                alt="背景プレビュー"
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              />
+              <div style={{
+                position: 'absolute', inset: 0,
+                background: `rgba(255,255,255,${1 - opacity})`,
+                pointerEvents: 'none',
+              }} />
+            </div>
+          )}
+
+          {/* 薄さ調整スライダー */}
+          {canvasBg.bgPhotoUrl && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 11, color: '#666', fontWeight: 'bold' }}>🌫️ 薄さ調整（白っぽくする）</span>
+                <span style={{ fontSize: 11, color: 'var(--primary)', fontWeight: 'bold', minWidth: 32, textAlign: 'right' }}>
+                  {Math.round((1 - opacity) * 100)}%
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 10, color: '#aaa', whiteSpace: 'nowrap' }}>そのまま</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={95}
+                  step={1}
+                  value={Math.round((1 - opacity) * 100)}
+                  onChange={e => {
+                    const whiteness = parseInt(e.target.value) / 100;
+                    setCanvasBg(prev => ({ ...prev, bgPhotoOpacity: 1 - whiteness }));
+                  }}
+                  style={{ flex: 1, accentColor: 'var(--primary)', cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: 10, color: '#aaa', whiteSpace: 'nowrap' }}>白く</span>
+              </div>
+            </div>
+          )}
+
+          {!canvasBg.bgPhotoUrl && (
+            <div style={{ textAlign: 'center', color: '#bbb', fontSize: 11, padding: '8px 0' }}>
+              写真を選ぶと背景に設定されます
+            </div>
+          )}
+
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={handlePhotoSelect}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -915,7 +1137,9 @@ export default function App() {
     patternType: string;   // 新しいパターン種別
     gradientDir: string;   // グラデーション方向 'to bottom' | 'to right' | '135deg' etc.
     bgImage?: string;      // 背景画像URL（設定時はこちらが優先）
-  }>({ color: '#fffbe6', color2: '#f26b9a', pattern: 'none', patternType: 'solid', gradientDir: 'to bottom', bgImage: undefined });
+    bgPhotoOpacity?: number; // 写真背景の不透明度 0〜1
+    bgPhotoUrl?: string;   // デバイス写真から選んだ背景URL
+  }>({ color: '#fffbe6', color2: '#f26b9a', pattern: 'none', patternType: 'solid', gradientDir: 'to bottom', bgImage: undefined, bgPhotoOpacity: 1, bgPhotoUrl: undefined });
   const [targetSlotId, setTargetSlotId] = useState<string | null>(null);
   const [cropImageUrl, setCropImageUrl] = useState<string | null>(null);
   const [cropInitialShape, setCropInitialShape] = useState<'square' | 'rectangle' | 'rectangle-h' | 'circle' | 'ellipse' | 'ellipse-h' | 'heart' | 'star' | undefined>(undefined);
@@ -932,10 +1156,26 @@ export default function App() {
   // 写真サブメニュー用state
   const [photoSubMenuId, setPhotoSubMenuId] = useState<string | null>(null);
   const [photoSubMenuPos, setPhotoSubMenuPos] = useState<{ x: number; y: number } | null>(null);
+  const [replaceTargetId, setReplaceTargetId] = useState<string | null>(null);
+  const [retrimTargetId, setRetrimTargetId] = useState<string | null>(null);
 
   // スタンプ・テキストサブメニュー用state
   const [itemSubMenuId, setItemSubMenuId] = useState<string | null>(null);
   const [itemSubMenuPos, setItemSubMenuPos] = useState<{ x: number; y: number } | null>(null);
+
+  // 写真ストック（複数枚事前選択）
+  const [photoStock, setPhotoStock] = useState<StockPhoto[]>([]);
+  // 写真追加サブメニューの表示
+  const [showPhotoAddMenu, setShowPhotoAddMenu] = useState(false);
+  const photoAddMenuRef = useRef<HTMLDivElement>(null);
+  // ストック整理モーダル
+  const [showStockOrganizer, setShowStockOrganizer] = useState(false);
+  const [stockDeleteSelected, setStockDeleteSelected] = useState<Set<number>>(new Set());
+  // 日付フィルタ確認モーダル（ストック追加時）
+  const [pendingStockPhotos, setPendingStockPhotos] = useState<StockPhoto[]>([]);
+  const [showDateFilter, setShowDateFilter] = useState(false);
+  const [dateFilterFrom, setDateFilterFrom] = useState('');
+  const [dateFilterTo, setDateFilterTo] = useState('');
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const maxZIndex = useRef(10);
@@ -953,14 +1193,46 @@ export default function App() {
 
   const addItem = (type: ItemType, content?: string, extra?: Partial<CanvasItem>) => {
     maxZIndex.current += 1;
+
+    const defaultW = type === 'text' ? 200 : type === 'stamp' ? 320 : 120;
+    const defaultH = type === 'text' ? 60 : type === 'stamp' ? 95 : 120;
+    const w = extra?.width ?? defaultW;
+    const h = extra?.height ?? defaultH;
+
+    // スタンプはキャンバス中央上部に配置（画像の添付例に合わせた位置）
+    // 既にスタンプがその付近にある場合は少し下にずらす
+    const STAGGER_STEP = 30; // ずらす量(px)
+    const BASE_Y_STAMP = Math.round(CANVAS_H * 0.12); // キャンバス高さの12%（上寄り中央）
+
+    let defaultX = 50;
+    let defaultY = 50;
+
+    if (type === 'stamp') {
+      defaultX = Math.round((CANVAS_W - w) / 2);
+      defaultY = BASE_Y_STAMP;
+
+      // 既存スタンプがこの付近にある場合、重ならないようにずらす
+      const THRESHOLD = 40;
+      let staggerCount = 0;
+      for (const existing of items) {
+        if (existing.type === 'stamp') {
+          const targetY = BASE_Y_STAMP + staggerCount * STAGGER_STEP;
+          if (Math.abs(existing.y - targetY) < THRESHOLD && Math.abs(existing.x - defaultX) < THRESHOLD) {
+            staggerCount += 1;
+          }
+        }
+      }
+      defaultY = BASE_Y_STAMP + staggerCount * STAGGER_STEP;
+    }
+
     const newItem: CanvasItem = {
       id: `${type}-${Date.now()}`,
       type,
       content,
-      x: 50,
-      y: 50,
-      width: type === 'text' ? 200 : 120,
-      height: type === 'text' ? 60 : 120,
+      x: defaultX,
+      y: defaultY,
+      width: w,
+      height: h,
       rotation: 0,
       zIndex: maxZIndex.current,
       ...extra,
@@ -970,8 +1242,9 @@ export default function App() {
   };
 
   const confirmAndApply = (action: () => void) => {
-    if (templateSlots.length > 0 || items.length > 0) {
-      if (!window.confirm('写真枠の配置をやり直します。これまでの写真枠が消えてしまいますが実行しますか？')) return;
+    const hasPhotos = items.some(i => i.type === 'photo');
+    if (templateSlots.length > 0 || hasPhotos) {
+      if (!window.confirm('写真枠の配置をやり直します。これまでの写真だけ消えますが、スタンプ・テキストは残ります。実行しますか？')) return;
     }
     action();
   };
@@ -980,7 +1253,7 @@ export default function App() {
     if (customSelected.length < 1) return;
     confirmAndApply(() => {
       pushHistory(items);
-      setItems([]);
+      setItems(prev => prev.filter(i => i.type !== 'photo'));
       setTemplateSlots(buildCustomSlots(customSelected));
       setCustomPicking(false);
       setCustomSelected([]);
@@ -998,7 +1271,7 @@ export default function App() {
   const applyTemplate = (template: TemplateData) => {
     confirmAndApply(() => {
       pushHistory(items);
-      setItems([]);
+      setItems(prev => prev.filter(i => i.type !== 'photo'));
       setTemplateSlots(template.slots.map(s => ({ ...s })));
       if (template.bg) setCanvasBg(prev => ({ ...prev, color: template.bg! }));
     });
@@ -1008,14 +1281,21 @@ export default function App() {
     pushHistory(items);
     setItems([]);
     setTemplateSlots([]);
-    setCanvasBg({ color: '#fffbe6', color2: '#f26b9a', pattern: 'none', patternType: 'solid', gradientDir: 'to bottom', bgImage: undefined });
+    setCanvasBg({ color: '#fffbe6', color2: '#f26b9a', pattern: 'none', patternType: 'solid', gradientDir: 'to bottom', bgImage: undefined, bgPhotoOpacity: 1, bgPhotoUrl: undefined });
   };
+
+  // アップロード時の元画像URLを一時保持するref（クロップ完了時にCanvasItemへ渡す）
+  const pendingOriginalUrl = useRef<string | null>(null);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => setCropImageUrl(ev.target?.result as string);
+    reader.onload = (ev) => {
+      const url = ev.target?.result as string;
+      pendingOriginalUrl.current = url; // 元画像を保存
+      setCropImageUrl(url);
+    };
     reader.readAsDataURL(file);
     e.target.value = '';
   };
@@ -1024,6 +1304,40 @@ export default function App() {
     const clipShape = (cropShape === 'heart' || cropShape === 'star' || cropShape === 'bubble')
       ? cropShape as ClipShape
       : undefined;
+
+    if (targetSlotId === '__replace__' && replaceTargetId) {
+      // 写真を差し替え（サイズ・位置・zIndexは維持、元画像も更新）
+      const originalUrl = pendingOriginalUrl.current ?? undefined;
+      pushHistory(items);
+      setItems(prev => prev.map(i =>
+        i.id === replaceTargetId
+          ? { ...i, content: croppedDataUrl, clipShape, ...(originalUrl ? { originalImageUrl: originalUrl } : {}) }
+          : i
+      ));
+      setReplaceTargetId(null);
+      setCropImageUrl(null);
+      setTargetSlotId(null);
+      pendingOriginalUrl.current = null;
+      return;
+    }
+
+    if (targetSlotId === '__retrim__' && retrimTargetId) {
+      // スキミングやり直し（元画像URLはそのまま維持）
+      pushHistory(items);
+      setItems(prev => prev.map(i =>
+        i.id === retrimTargetId
+          ? { ...i, content: croppedDataUrl, clipShape }
+          : i
+      ));
+      setRetrimTargetId(null);
+      setCropImageUrl(null);
+      setTargetSlotId(null);
+      pendingOriginalUrl.current = null;
+      return;
+    }
+
+    const originalUrl = pendingOriginalUrl.current ?? undefined;
+
     if (targetSlotId) {
       const slot = templateSlots.find(s => s.id === targetSlotId);
       if (slot) {
@@ -1032,6 +1346,7 @@ export default function App() {
           id: `photo-slot-${targetSlotId}-${Date.now()}`,
           type: 'photo',
           content: croppedDataUrl,
+          originalImageUrl: originalUrl, // 元画像を保存
           x: slot.x,
           y: slot.y,
           width: slot.width,
@@ -1045,10 +1360,11 @@ export default function App() {
         setTemplateSlots(prev => prev.filter(s => s.id !== targetSlotId));
       }
     } else {
-      addItem('photo', croppedDataUrl, { clipShape });
+      addItem('photo', croppedDataUrl, { clipShape, originalImageUrl: originalUrl });
     }
     setCropImageUrl(null);
     setTargetSlotId(null);
+    pendingOriginalUrl.current = null;
   };
 
   const saveAlbum = async () => {
@@ -1142,6 +1458,142 @@ export default function App() {
     setItemSubMenuPos(null);
   };
 
+  const handleReplacePhoto = (id: string) => {
+    setReplaceTargetId(id);
+    setPhotoSubMenuId(null);
+    setPhotoSubMenuPos(null);
+    document.getElementById('photo-replace-upload')?.click();
+  };
+
+  const handleReplaceFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !replaceTargetId) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const item = items.find(i => i.id === replaceTargetId);
+      if (!item) return;
+      const url = ev.target?.result as string;
+      pendingOriginalUrl.current = url; // 差し替え時も元画像を保存
+      // 元のアイテムのサイズ・形状でクロップモーダルを開く
+      const ratio = item.width / item.height;
+      let shape: typeof cropInitialShape = undefined;
+      if (item.clipShape === 'heart') shape = 'heart';
+      else if (item.clipShape === 'star') shape = 'star';
+      else if (ratio > 1.15) shape = 'rectangle-h';
+      else if (ratio < 0.85) shape = 'rectangle';
+      else shape = 'square';
+      setCropInitialShape(shape);
+      setCropImageUrl(url);
+      setTargetSlotId('__replace__');
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleRetrimPhoto = (id: string) => {
+    const item = items.find(i => i.id === id);
+    if (!item || !item.content) return;
+    setRetrimTargetId(id);
+    setPhotoSubMenuId(null);
+    setPhotoSubMenuPos(null);
+    const ratio = item.width / item.height;
+    let shape: typeof cropInitialShape = undefined;
+    if (item.clipShape === 'heart') shape = 'heart';
+    else if (item.clipShape === 'star') shape = 'star';
+    else if (ratio > 1.15) shape = 'rectangle-h';
+    else if (ratio < 0.85) shape = 'rectangle';
+    else shape = 'square';
+    setCropInitialShape(shape);
+    // 元画像があればそちらを使う（より広い範囲でスキミングし直せる）
+    setCropImageUrl(item.originalImageUrl ?? item.content);
+    setTargetSlotId('__retrim__');
+  };
+
+  // ストックへ複数枚追加（Exif日付付き）
+  const handleStockFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    e.target.value = '';
+    setShowPhotoAddMenu(false);
+    const photos = await Promise.all(files.map(fileToStockPhoto));
+    // Exif日付を持つ写真が1枚以上あれば日付フィルタUIを表示
+    const hasDate = photos.some(p => p.takenAt !== null);
+    if (hasDate && photos.length > 1) {
+      // 日付範囲の初期値：選んだ写真の最古〜最新
+      const dates = photos.filter(p => p.takenAt).map(p => p.takenAt!);
+      const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
+      const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
+      const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      setDateFilterFrom(fmt(minDate));
+      setDateFilterTo(fmt(maxDate));
+      setPendingStockPhotos(photos);
+      setShowDateFilter(true);
+    } else {
+      setPhotoStock(prev => [...prev, ...photos]);
+    }
+  };
+
+  // スロットのstyleからClipShapeを判定するヘルパー
+  const slotStyleToClipShape = (slot: SlotData): ClipShape | undefined => {
+    const style = slot.style ?? {};
+    const clipPath = (style as React.CSSProperties).clipPath as string | undefined;
+    if (!clipPath) return undefined;
+    if (clipPath.includes('50% 25%') || clipPath.includes('50% 15%')) return 'heart';
+    if (clipPath.includes('61.8%') || clipPath.includes('61% 35%')) return 'star';
+    if (clipPath.includes('75%, 75% 75%') || clipPath.includes('75% 75%')) return 'bubble';
+    return undefined;
+  };
+
+  // スロットのstyleからCanvasItemに適用するstyleを生成するヘルパー
+  const slotStyleToItemStyle = (slot: SlotData): React.CSSProperties => {
+    const style = slot.style ?? {};
+    const borderRadius = (style as React.CSSProperties).borderRadius;
+    const clipPath = (style as React.CSSProperties).clipPath as string | undefined;
+    const result: React.CSSProperties = {};
+    if (borderRadius) result.borderRadius = borderRadius;
+    if (clipPath) result.clipPath = clipPath;
+    return result;
+  };
+
+  // 枠を全部埋める（ストックからランダム）
+  const handleFillAllSlots = () => {
+    if (photoStock.length === 0) {
+      alert('先に「写真をストックに追加」で写真を選んでください。');
+      return;
+    }
+    if (templateSlots.length === 0) {
+      alert('写真枠がありません。先に「写真枠配置」から枠を配置してください。');
+      return;
+    }
+    pushHistory(items);
+    const shuffled = [...photoStock].sort(() => Math.random() - 0.5);
+    const newItems: CanvasItem[] = templateSlots.map((slot, i) => {
+      const imgUrl = shuffled[i % shuffled.length].url;
+      maxZIndex.current += 1;
+      const clipShape = slotStyleToClipShape(slot);
+      return {
+        id: `photo-slot-${slot.id}-${Date.now()}-${i}`,
+        type: 'photo' as ItemType,
+        content: imgUrl,
+        originalImageUrl: imgUrl,
+        x: slot.x,
+        y: slot.y,
+        width: slot.width,
+        height: slot.height,
+        rotation: slot.rotation ?? 0,
+        zIndex: maxZIndex.current,
+        clipShape,
+        // borderRadius（円・楕円）やclipPath（ハート・星）をslotStyleとして保持
+        ...(Object.keys(slotStyleToItemStyle(slot)).length > 0
+          ? { slotStyle: slotStyleToItemStyle(slot) }
+          : {}),
+      };
+    });
+    setItems(prev => [...prev, ...newItems]);
+    setTemplateSlots([]);
+    setShowPhotoAddMenu(false);
+  };
+
   const selectedIdRef = useRef<string | null>(null);
   selectedIdRef.current = selectedId;
 
@@ -1187,6 +1639,7 @@ export default function App() {
   }, []);
 
   const handleTabToggle = (tab: MainTab) => {
+    setShowPhotoAddMenu(false);
     setActiveMainTab(prev => prev === tab ? null : tab);
   };
 
@@ -1348,7 +1801,7 @@ export default function App() {
       case 'stamp':
         return (
           <StampMenu
-            onAdd={(url) => addItem('stamp', url, { width: 100, height: 100 })}
+            onAdd={(url) => addItem('stamp', url, { width: 320, height: 95 })}
           />
         );
       case 'background':
@@ -1371,12 +1824,21 @@ export default function App() {
         </button>
       </header>
 
-      <main className="canvas-area" onClick={() => { setSelectedId(null); setPhotoSubMenuId(null); setPhotoSubMenuPos(null); setItemSubMenuId(null); setItemSubMenuPos(null); setActiveMainTab(null); }}>
+      <main className="canvas-area" onClick={() => { setSelectedId(null); setPhotoSubMenuId(null); setPhotoSubMenuPos(null); setItemSubMenuId(null); setItemSubMenuPos(null); setActiveMainTab(null); setShowPhotoAddMenu(false); }}>
         <div
           ref={canvasRef}
           className="album-canvas"
           style={{ width: CANVAS_W, height: CANVAS_H, ...getCanvasBgStyle(canvasBg) }}
         >
+          {/* 写真背景の薄さオーバーレイ */}
+          {canvasBg.bgPhotoUrl && (canvasBg.bgPhotoOpacity ?? 1) < 1 && (
+            <div style={{
+              position: 'absolute', inset: 0,
+              background: `rgba(255,255,255,${1 - (canvasBg.bgPhotoOpacity ?? 1)})`,
+              pointerEvents: 'none',
+              zIndex: 0,
+            }} />
+          )}
           {/* SVGパターンオーバーレイ（格子・水玉・ストライプ・星） */}
           {!canvasBg.bgImage && canvasBg.patternType !== 'solid' && canvasBg.patternType !== 'gradient' && (
             <BgPatternSvg patternType={canvasBg.patternType} color={canvasBg.color} color2={canvasBg.color2} width={CANVAS_W} height={CANVAS_H} />
@@ -1427,26 +1889,44 @@ export default function App() {
                 dragHandleClassName="drag-handle"
                 enableResizing={isSelected ? undefined : false}
                 resizeHandleStyles={isSelected ? {
-                  bottomRight: { display: 'none' },
+                  topLeft: { display: 'none' },
+                } : {}}
+                resizeHandleComponent={isSelected ? {
+                  bottomRight: (
+                    <div
+                      style={{
+                        width: 22,
+                        height: 22,
+                        background: 'rgba(255,255,255,0.95)',
+                        border: '2px solid #f26b9a',
+                        borderRadius: 4,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'se-resize',
+                        boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
+                        position: 'absolute',
+                        bottom: -2,
+                        right: -2,
+                      }}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                        <path d="M2 10 L10 10 L10 2" stroke="#f26b9a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M10 10 L6 6" stroke="#f26b9a" strokeWidth="1.5" strokeLinecap="round" opacity="0.5"/>
+                      </svg>
+                    </div>
+                  ),
                 } : {}}
               >
                 <div
-                  className={`canvas-item-wrapper drag-handle ${isSelected ? 'selected' : ''}`}
+                  className={`canvas-item-wrapper ${isSelected ? 'selected' : ''}`}
                   style={{
                     transform: `rotate(${item.rotation}deg)`,
-                    ...(item.clipShape ? { background: 'transparent' } : {}),
+                    ...(item.clipShape || item.slotStyle ? { background: 'transparent' } : {}),
                   }}
-                  onPointerDown={(e) => {
+                  onPointerDown={(e) => { e.stopPropagation(); }}
+                  onClick={(e) => {
                     e.stopPropagation();
-                    (e.currentTarget as HTMLElement).dataset.pointerDownX = String(e.clientX);
-                    (e.currentTarget as HTMLElement).dataset.pointerDownY = String(e.clientY);
-                  }}
-                  onPointerUp={(e) => {
-                    e.stopPropagation();
-                    const el = e.currentTarget as HTMLElement;
-                    const dx = Math.abs(e.clientX - Number(el.dataset.pointerDownX ?? e.clientX));
-                    const dy = Math.abs(e.clientY - Number(el.dataset.pointerDownY ?? e.clientY));
-                    if (dx > 8 || dy > 8) return;
                     setSelectedId(item.id);
                     const canvasEl = canvasRef.current;
                     const getMenuPos = () => {
@@ -1483,7 +1963,6 @@ export default function App() {
                       setItemSubMenuPos(null);
                     }
                   }}
-                  onClick={(e) => { e.stopPropagation(); }}
                 >
                   {item.type === 'text' ? (
                     (() => {
@@ -1491,7 +1970,7 @@ export default function App() {
                       const isSpecial = sid === 'arch-up' || sid === 'arch-down' || sid === 'wave';
                       if (isSpecial) {
                         return (
-                          <div className="item-text" style={{ padding: 0 }}>
+                          <div className="item-text drag-handle" style={{ padding: 0 }}>
                             <ArchText
                               text={item.content ?? ''}
                               color={item.color ?? '#333'}
@@ -1524,7 +2003,13 @@ export default function App() {
                       src={item.content}
                       className="item-photo drag-handle"
                       alt=""
-                      style={item.clipShape ? getClipPathStyle(item.clipShape) : undefined}
+                      style={
+                        item.clipShape
+                          ? getClipPathStyle(item.clipShape)
+                          : item.slotStyle
+                            ? item.slotStyle
+                            : undefined
+                      }
                     />
                   )}
                 </div>
@@ -1540,6 +2025,8 @@ export default function App() {
                   </button>
                 )}
 
+                {/* 写真サブメニュー: position:fixed のオーバーレイとして外部で描画するため、ここでは不要 */}
+
                 {isSelected && (
                   <RotateHandle
                     itemId={item.id}
@@ -1549,6 +2036,7 @@ export default function App() {
                     itemH={item.height}
                     rotation={item.rotation}
                     onRotate={handleItemRotate}
+                    position="topLeft"
                   />
                 )}
               </Rnd>
@@ -1557,11 +2045,12 @@ export default function App() {
         </div>
       </main>
 
-      {/* 写真サブメニュー: position:fixed オーバーレイ */}
+      {/* 写真サブメニュー: position:fixed オーバーレイ（背面・画面端でも必ず表示） */}
       {photoSubMenuId && photoSubMenuPos && (() => {
         const subItem = items.find(i => i.id === photoSubMenuId);
         if (!subItem) return null;
-        const MENU_H = 48;
+        // 画面下端からはみ出ないよう補正
+        const MENU_H = 4 * 44; // 4項目 × 約44px
         const winH = window.innerHeight;
         const top = photoSubMenuPos.y + MENU_H > winH - 60
           ? photoSubMenuPos.y - MENU_H - subItem.height - 16
@@ -1570,35 +2059,53 @@ export default function App() {
         return (
           <div
             style={{
-              position: 'fixed', top, left, zIndex: 99999,
-              background: 'rgba(30,30,30,0.95)', borderRadius: 12,
-              boxShadow: '0 6px 24px rgba(0,0,0,0.45)', overflow: 'hidden',
-              backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
-              border: '1px solid rgba(255,255,255,0.08)', touchAction: 'manipulation',
-              display: 'flex', flexDirection: 'row',
+              position: 'fixed',
+              top,
+              left,
+              zIndex: 99999,
+              background: 'rgba(30,30,30,0.95)',
+              borderRadius: 12,
+              boxShadow: '0 6px 24px rgba(0,0,0,0.45)',
+              overflow: 'hidden',
+              minWidth: 200,
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              touchAction: 'manipulation',
             }}
             onClick={e => e.stopPropagation()}
             onPointerDown={e => e.stopPropagation()}
           >
             {[
-              { label: '前面へ', icon: '⬆', onClick: () => handleBringToFront(subItem.id) },
-              { label: '背面へ', icon: '⬇', onClick: () => handleSendToBack(subItem.id) },
+              { label: '前面へ',      icon: '⬆', onClick: () => { handleBringToFront(subItem.id); setPhotoSubMenuId(null); setPhotoSubMenuPos(null); } },
+              { label: '背面へ',      icon: '⬇', onClick: () => { handleSendToBack(subItem.id);   setPhotoSubMenuId(null); setPhotoSubMenuPos(null); } },
+              { label: 'スキミングする', icon: '✂️', onClick: () => { handleRetrimPhoto(subItem.id);  setPhotoSubMenuId(null); setPhotoSubMenuPos(null); } },
+              { label: '写真を変更する', icon: '🔄', onClick: () => { handleReplacePhoto(subItem.id); setPhotoSubMenuId(null); setPhotoSubMenuPos(null); } },
             ].map((action, idx, arr) => (
-              <button key={action.label}
+              <button
+                key={action.label}
                 onPointerDown={e => e.stopPropagation()}
-                onPointerUp={(e) => { e.stopPropagation(); action.onClick(); }}
-                onClick={(e) => { e.stopPropagation(); }}
+                onClick={(e) => { e.stopPropagation(); action.onClick(); }}
                 style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  padding: '10px 18px', background: 'transparent', border: 'none',
-                  borderRight: idx < arr.length - 1 ? '1px solid rgba(255,255,255,0.1)' : 'none',
-                  color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                  touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent',
-                  whiteSpace: 'nowrap',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  width: '100%',
+                  padding: '11px 16px',
+                  background: 'transparent',
+                  border: 'none',
+                  borderBottom: idx < arr.length - 1 ? '1px solid rgba(255,255,255,0.1)' : 'none',
+                  color: '#fff',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  touchAction: 'manipulation',
+                  WebkitTapHighlightColor: 'transparent',
                 }}
               >
-                <span style={{ fontSize: 15 }}>{action.icon}</span>
-                <span>{action.label}</span>
+                <span style={{ fontSize: 16, minWidth: 22 }}>{action.icon}</span>
+                <span style={{ flex: 1 }}>{action.label}</span>
               </button>
             ))}
           </div>
@@ -1609,7 +2116,7 @@ export default function App() {
       {itemSubMenuId && itemSubMenuPos && (() => {
         const subItem = items.find(i => i.id === itemSubMenuId);
         if (!subItem) return null;
-        const MENU_H = 48;
+        const MENU_H = 2 * 44;
         const winH = window.innerHeight;
         const top = itemSubMenuPos.y + MENU_H > winH - 60
           ? itemSubMenuPos.y - MENU_H - subItem.height - 16
@@ -1618,35 +2125,51 @@ export default function App() {
         return (
           <div
             style={{
-              position: 'fixed', top, left, zIndex: 99999,
-              background: 'rgba(30,30,30,0.95)', borderRadius: 12,
-              boxShadow: '0 6px 24px rgba(0,0,0,0.45)', overflow: 'hidden',
-              backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
-              border: '1px solid rgba(255,255,255,0.08)', touchAction: 'manipulation',
-              display: 'flex', flexDirection: 'row',
+              position: 'fixed',
+              top,
+              left,
+              zIndex: 99999,
+              background: 'rgba(30,30,30,0.95)',
+              borderRadius: 12,
+              boxShadow: '0 6px 24px rgba(0,0,0,0.45)',
+              overflow: 'hidden',
+              minWidth: 200,
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              touchAction: 'manipulation',
             }}
             onClick={e => e.stopPropagation()}
             onPointerDown={e => e.stopPropagation()}
           >
             {[
-              { label: '前面へ', icon: '⬆', onClick: () => handleBringToFront(subItem.id) },
-              { label: '背面へ', icon: '⬇', onClick: () => handleSendToBack(subItem.id) },
+              { label: '前面へ', icon: '⬆', onClick: () => { handleBringToFront(subItem.id); setItemSubMenuId(null); setItemSubMenuPos(null); } },
+              { label: '背面へ', icon: '⬇', onClick: () => { handleSendToBack(subItem.id);   setItemSubMenuId(null); setItemSubMenuPos(null); } },
             ].map((action, idx, arr) => (
-              <button key={action.label}
+              <button
+                key={action.label}
                 onPointerDown={e => e.stopPropagation()}
-                onPointerUp={(e) => { e.stopPropagation(); action.onClick(); }}
-                onClick={(e) => { e.stopPropagation(); }}
+                onClick={(e) => { e.stopPropagation(); action.onClick(); }}
                 style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  padding: '10px 18px', background: 'transparent', border: 'none',
-                  borderRight: idx < arr.length - 1 ? '1px solid rgba(255,255,255,0.1)' : 'none',
-                  color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                  touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent',
-                  whiteSpace: 'nowrap',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  width: '100%',
+                  padding: '11px 16px',
+                  background: 'transparent',
+                  border: 'none',
+                  borderBottom: idx < arr.length - 1 ? '1px solid rgba(255,255,255,0.1)' : 'none',
+                  color: '#fff',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  touchAction: 'manipulation',
+                  WebkitTapHighlightColor: 'transparent',
                 }}
               >
-                <span style={{ fontSize: 15 }}>{action.icon}</span>
-                <span>{action.label}</span>
+                <span style={{ fontSize: 16, minWidth: 22 }}>{action.icon}</span>
+                <span style={{ flex: 1 }}>{action.label}</span>
               </button>
             ))}
           </div>
@@ -1655,25 +2178,154 @@ export default function App() {
 
       <nav className="bottom-menu">
         {activeMainTab !== null && (
-          <div className="sub-menu" style={
-            activeMainTab === 'template' && customPicking ? { height: 180 }
-            : activeMainTab === 'text' ? { height: 160 }
-            : activeMainTab === 'background' ? { height: 205 }
-            : undefined
-          }>
+<div className="sub-menu" style={
+  activeMainTab === 'template' && customPicking ? { height: 180 }
+  : activeMainTab === 'text' ? { height: 160 }
+  : activeMainTab === 'background' ? { height: 185 } // 185に減らす
+  : undefined
+}>
             {renderSubMenu()}
           </div>
         )}
         <div className="main-tabs">
-          <button className={`tab-btn ${activeMainTab === 'template' ? 'active' : ''}`} onClick={() => handleTabToggle('template')}>
-            <LayoutTemplate size={20} /><span>写真枠配置</span>
-          </button>
-          <button className={`tab-btn ${activeMainTab === 'background' ? 'active' : ''}`} onClick={() => handleTabToggle('background')}>
-            <Grid size={20} /><span>背景変更</span>
-          </button>
-          <button className="tab-btn" onClick={() => { setTargetSlotId(null); document.getElementById('photo-upload')?.click(); }}>
-            <ImagePlus size={20} /><span>写真追加</span>
-          </button>
+{/* 1. 背景変更を一番左に移動 */}
+  <button className={`tab-btn ${activeMainTab === 'background' ? 'active' : ''}`} onClick={() => handleTabToggle('background')}>
+    <Grid size={20} /><span>背景変更</span>
+  </button>
+
+  {/* 2. 写真枠配置を左から二番目に移動 */}
+  <button className={`tab-btn ${activeMainTab === 'template' ? 'active' : ''}`} onClick={() => handleTabToggle('template')}>
+    <LayoutTemplate size={20} /><span>写真枠配置</span>
+  </button>
+          <div style={{ position: 'relative', display: 'contents' }} ref={photoAddMenuRef}>
+            <button
+              className={`tab-btn ${showPhotoAddMenu ? 'active' : ''}`}
+              onClick={(e) => { e.stopPropagation(); setShowPhotoAddMenu(prev => !prev); setActiveMainTab(null); }}
+              style={{ position: 'relative' }}
+            >
+              <ImagePlus size={20} /><span>写真追加</span>
+            </button>
+            {showPhotoAddMenu && (
+              <div
+                onClick={e => e.stopPropagation()}
+                style={{
+                  position: 'fixed',
+                  bottom: 70,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  background: 'rgba(30,30,30,0.96)',
+                  borderRadius: 12,
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+                  overflow: 'hidden',
+                  minWidth: 200,
+                  zIndex: 9999,
+                }}
+              >
+                <button
+                  onPointerDown={e => e.stopPropagation()}
+                  onClick={() => { setShowPhotoAddMenu(false); setTargetSlotId(null); document.getElementById('photo-upload')?.click(); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    width: '100%', padding: '12px 16px',
+                    background: 'transparent', border: 'none',
+                    borderBottom: '1px solid rgba(255,255,255,0.1)',
+                    color: '#fff', fontSize: 13, fontWeight: 600,
+                    cursor: 'pointer', textAlign: 'left',
+                  }}
+                >
+                  <span style={{ fontSize: 18, minWidth: 24 }}>📷</span>
+                  <div>
+                    <div>１枚追加</div>
+                    <div style={{ fontSize: 10, color: '#aaa', fontWeight: 400 }}>写真を1枚選んで追加</div>
+                  </div>
+                </button>
+                <button
+                  onPointerDown={e => e.stopPropagation()}
+                  onClick={() => { document.getElementById('photo-stock-upload')?.click(); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    width: '100%', padding: '12px 16px',
+                    background: 'transparent', border: 'none',
+                    borderBottom: '1px solid rgba(255,255,255,0.1)',
+                    color: '#fff', fontSize: 13, fontWeight: 600,
+                    cursor: 'pointer', textAlign: 'left',
+                  }}
+                >
+                  <span style={{ fontSize: 18, minWidth: 24 }}>🗂️</span>
+                  <div>
+                    <div>写真をストックに追加</div>
+                    <div style={{ fontSize: 10, color: '#aaa', fontWeight: 400 }}>
+                      {photoStock.length > 0 ? `現在${photoStock.length}枚ストック済み` : '複数枚まとめて選べます'}
+                    </div>
+                  </div>
+                </button>
+                <button
+                  onPointerDown={e => e.stopPropagation()}
+                  onClick={() => handleFillAllSlots()}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    width: '100%', padding: '12px 16px',
+                    background: photoStock.length > 0 && templateSlots.length > 0
+                      ? 'rgba(242,107,154,0.18)' : 'transparent',
+                    border: 'none',
+                    borderBottom: photoStock.length > 0 ? '1px solid rgba(255,255,255,0.1)' : 'none',
+                    color: photoStock.length > 0 && templateSlots.length > 0 ? '#f26b9a' : '#666',
+                    fontSize: 13, fontWeight: 600,
+                    cursor: photoStock.length > 0 && templateSlots.length > 0 ? 'pointer' : 'default',
+                    textAlign: 'left',
+                  }}
+                >
+                  <span style={{ fontSize: 18, minWidth: 24 }}>🎲</span>
+                  <div>
+                    <div>ストックから枠に<br />ランダムで入れる</div>
+                    <div style={{ fontSize: 10, color: '#aaa', fontWeight: 400 }}>
+                      {photoStock.length === 0
+                        ? 'ストックに写真がありません'
+                        : templateSlots.length === 0
+                          ? '空き枠がありません'
+                          : `ストック${photoStock.length}枚 → ${templateSlots.length}枠にランダム配置`}
+                    </div>
+                  </div>
+                </button>
+                {photoStock.length > 0 && (
+                  <>
+                    <button
+                      onPointerDown={e => e.stopPropagation()}
+                      onClick={() => { setShowPhotoAddMenu(false); setStockDeleteSelected(new Set()); setShowStockOrganizer(true); }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        width: '100%', padding: '12px 16px',
+                        background: 'transparent', border: 'none',
+                        borderBottom: '1px solid rgba(255,255,255,0.1)',
+                        color: '#fff', fontSize: 13, fontWeight: 600,
+                        cursor: 'pointer', textAlign: 'left',
+                      }}
+                    >
+                      <span style={{ fontSize: 18, minWidth: 24 }}>✏️</span>
+                      <div>
+                        <div>ストックを整理する</div>
+                        <div style={{ fontSize: 10, color: '#aaa', fontWeight: 400 }}>選んで削除・追加・日付で確認</div>
+                      </div>
+                    </button>
+                    <button
+                      onPointerDown={e => e.stopPropagation()}
+                      onClick={() => { setPhotoStock([]); setShowPhotoAddMenu(false); }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        width: '100%', padding: '10px 16px',
+                        background: 'transparent', border: 'none',
+                        color: '#ff7070', fontSize: 12, fontWeight: 500,
+                        cursor: 'pointer', textAlign: 'left',
+                      }}
+                    >
+                      <span style={{ fontSize: 16, minWidth: 24 }}>🗑️</span>
+                      <div>ストックを全部消す（{photoStock.length}枚）</div>
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
           <button className={`tab-btn ${activeMainTab === 'stamp' ? 'active' : ''}`} onClick={() => handleTabToggle('stamp')}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 2a5 5 0 0 1 5 5c0 2-1 3.5-2.5 4.5V13h-5v-1.5C8 10.5 7 9 7 7a5 5 0 0 1 5-5z"/>
@@ -1692,6 +2344,490 @@ export default function App() {
       </nav>
 
       <input id="photo-upload" type="file" accept="image/*" onChange={handleFileUpload} style={{ display: 'none' }} />
+      <input id="photo-replace-upload" type="file" accept="image/*" onChange={handleReplaceFileUpload} style={{ display: 'none' }} />
+      <input id="photo-stock-upload" type="file" accept="image/*" multiple onChange={handleStockFileUpload} style={{ display: 'none' }} />
+      <input id="photo-stock-add-organizer" type="file" accept="image/*" multiple onChange={async (e) => {
+        const files = Array.from(e.target.files ?? []);
+        if (files.length === 0) return;
+        e.target.value = '';
+        const photos = await Promise.all(files.map(fileToStockPhoto));
+        setPhotoStock(prev => [...prev, ...photos]);
+      }} style={{ display: 'none' }} />
+
+      {/* ===== 日付フィルタモーダル ===== */}
+      {showDateFilter && (() => {
+        // フィルタ適用後の枚数をプレビュー
+        const from = dateFilterFrom ? new Date(dateFilterFrom) : null;
+        const to = dateFilterTo ? new Date(dateFilterTo + 'T23:59:59') : null;
+        const filtered = pendingStockPhotos.filter(p => {
+          if (!p.takenAt) return true; // 日付不明は通す
+          if (from && p.takenAt < from) return false;
+          if (to && p.takenAt > to) return false;
+          return true;
+        });
+        // 月ごとの件数サマリー
+        const monthMap: Record<string, number> = {};
+        pendingStockPhotos.forEach(p => {
+          if (!p.takenAt) return;
+          const key = `${p.takenAt.getFullYear()}年${p.takenAt.getMonth()+1}月`;
+          monthMap[key] = (monthMap[key] ?? 0) + 1;
+        });
+        const monthEntries = Object.entries(monthMap).sort((a, b) => a[0] < b[0] ? -1 : 1);
+        const noDateCount = pendingStockPhotos.filter(p => !p.takenAt).length;
+
+        return (
+          <div
+            onClick={() => {
+              setPhotoStock(prev => [...prev, ...pendingStockPhotos]);
+              setPendingStockPhotos([]);
+              setShowDateFilter(false);
+            }}
+            style={{
+              position: 'fixed', inset: 0,
+              background: 'rgba(0,0,0,0.78)',
+              zIndex: 10002,
+              display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+            }}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                width: '100%', maxWidth: 500,
+                background: '#1a1a1a',
+                borderRadius: '18px 18px 0 0',
+                paddingBottom: 'env(safe-area-inset-bottom)',
+                maxHeight: '88dvh',
+                display: 'flex', flexDirection: 'column',
+              }}
+            >
+              {/* ヘッダー */}
+              <div style={{
+                padding: '14px 16px 10px',
+                borderBottom: '1px solid rgba(255,255,255,0.1)',
+                flexShrink: 0,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>📅 日付で絞り込む</span>
+                  <button
+                    onClick={() => {
+                      setPhotoStock(prev => [...prev, ...pendingStockPhotos]);
+                      setPendingStockPhotos([]);
+                      setShowDateFilter(false);
+                    }}
+                    style={{ background: 'none', border: 'none', color: '#888', fontSize: 12, cursor: 'pointer' }}
+                  >絞り込まずに全部追加</button>
+                </div>
+                <div style={{ fontSize: 11, color: '#888' }}>
+                  選んだ {pendingStockPhotos.length} 枚から、期間を指定してストックに追加できます
+                </div>
+              </div>
+
+              <div style={{ overflowY: 'auto', flex: 1 }}>
+                {/* 月ごとサマリー */}
+                {monthEntries.length > 0 && (
+                  <div style={{ padding: '10px 16px 6px' }}>
+                    <div style={{ fontSize: 11, color: '#888', marginBottom: 6 }}>📊 写真の内訳</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {monthEntries.map(([month, count]) => (
+                        <button
+                          key={month}
+                          onClick={() => {
+                            // その月全体を範囲にセット
+                            const m = month.match(/(\d+)年(\d+)月/);
+                            if (!m) return;
+                            const y = parseInt(m[1]), mo = parseInt(m[2]);
+                            const last = new Date(y, mo, 0).getDate();
+                            setDateFilterFrom(`${y}-${String(mo).padStart(2,'0')}-01`);
+                            setDateFilterTo(`${y}-${String(mo).padStart(2,'0')}-${String(last).padStart(2,'0')}`);
+                          }}
+                          style={{
+                            padding: '4px 10px', borderRadius: 20,
+                            border: '1.5px solid rgba(242,107,154,0.5)',
+                            background: 'rgba(242,107,154,0.10)',
+                            color: '#f26b9a', fontSize: 11, cursor: 'pointer',
+                          }}
+                        >
+                          {month} ({count}枚)
+                        </button>
+                      ))}
+                      {noDateCount > 0 && (
+                        <span style={{
+                          padding: '4px 10px', borderRadius: 20,
+                          border: '1px solid rgba(255,255,255,0.1)',
+                          color: '#666', fontSize: 11,
+                        }}>日付不明 {noDateCount}枚</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* 日付範囲指定 */}
+                <div style={{ padding: '10px 16px' }}>
+                  <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>📆 期間を指定</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 10, color: '#aaa', marginBottom: 3 }}>開始日</div>
+                      <input
+                        type="date"
+                        value={dateFilterFrom}
+                        onChange={e => setDateFilterFrom(e.target.value)}
+                        style={{
+                          width: '100%', padding: '8px 10px', borderRadius: 8,
+                          border: '1.5px solid rgba(255,255,255,0.15)',
+                          background: '#2a2a2a', color: '#fff', fontSize: 13,
+                          colorScheme: 'dark',
+                        }}
+                      />
+                    </div>
+                    <span style={{ color: '#666', fontSize: 14, marginTop: 16 }}>〜</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 10, color: '#aaa', marginBottom: 3 }}>終了日</div>
+                      <input
+                        type="date"
+                        value={dateFilterTo}
+                        onChange={e => setDateFilterTo(e.target.value)}
+                        style={{
+                          width: '100%', padding: '8px 10px', borderRadius: 8,
+                          border: '1.5px solid rgba(255,255,255,0.15)',
+                          background: '#2a2a2a', color: '#fff', fontSize: 13,
+                          colorScheme: 'dark',
+                        }}
+                      />
+                    </div>
+                  </div>
+                  {/* クイック選択ボタン */}
+                  <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                    {[
+                      { label: '今月', fn: () => {
+                        const now = new Date();
+                        const y = now.getFullYear(), mo = now.getMonth()+1;
+                        const last = new Date(y, mo, 0).getDate();
+                        setDateFilterFrom(`${y}-${String(mo).padStart(2,'0')}-01`);
+                        setDateFilterTo(`${y}-${String(mo).padStart(2,'0')}-${String(last).padStart(2,'0')}`);
+                      }},
+                      { label: '先月', fn: () => {
+                        const now = new Date();
+                        const d = new Date(now.getFullYear(), now.getMonth()-1, 1);
+                        const y = d.getFullYear(), mo = d.getMonth()+1;
+                        const last = new Date(y, mo, 0).getDate();
+                        setDateFilterFrom(`${y}-${String(mo).padStart(2,'0')}-01`);
+                        setDateFilterTo(`${y}-${String(mo).padStart(2,'0')}-${String(last).padStart(2,'0')}`);
+                      }},
+                      { label: '今年', fn: () => {
+                        const y = new Date().getFullYear();
+                        setDateFilterFrom(`${y}-01-01`);
+                        setDateFilterTo(`${y}-12-31`);
+                      }},
+                      { label: '全期間', fn: () => {
+                        const dates = pendingStockPhotos.filter(p => p.takenAt).map(p => p.takenAt!);
+                        if (dates.length === 0) return;
+                        const min = new Date(Math.min(...dates.map(d => d.getTime())));
+                        const max = new Date(Math.max(...dates.map(d => d.getTime())));
+                        const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                        setDateFilterFrom(fmt(min));
+                        setDateFilterTo(fmt(max));
+                      }},
+                    ].map(btn => (
+                      <button
+                        key={btn.label}
+                        onClick={btn.fn}
+                        style={{
+                          padding: '4px 12px', borderRadius: 16,
+                          border: '1px solid rgba(255,255,255,0.18)',
+                          background: 'rgba(255,255,255,0.06)',
+                          color: '#ccc', fontSize: 11, cursor: 'pointer',
+                        }}
+                      >{btn.label}</button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* フィルタ結果プレビュー（サムネイル） */}
+                <div style={{ padding: '4px 16px 12px' }}>
+                  <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>
+                    🖼️ 絞り込み結果: <span style={{ color: filtered.length > 0 ? '#f26b9a' : '#666', fontWeight: 700 }}>{filtered.length}枚</span>
+                    {filtered.length !== pendingStockPhotos.length && (
+                      <span style={{ color: '#555' }}> / {pendingStockPhotos.length}枚中</span>
+                    )}
+                  </div>
+                  {filtered.length > 0 ? (
+                    <div style={{
+                      display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 5,
+                      maxHeight: 140, overflowY: 'auto',
+                    }}>
+                      {filtered.slice(0, 20).map((p, i) => (
+                        <div key={i} style={{ aspectRatio: '1/1', borderRadius: 6, overflow: 'hidden', position: 'relative' }}>
+                          <img src={p.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          {p.takenAt && (
+                            <div style={{
+                              position: 'absolute', bottom: 0, left: 0, right: 0,
+                              background: 'rgba(0,0,0,0.6)', fontSize: 7, color: '#ddd',
+                              padding: '1px 3px', textAlign: 'center',
+                            }}>
+                              {p.takenAt.getMonth()+1}/{p.takenAt.getDate()}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      {filtered.length > 20 && (
+                        <div style={{
+                          aspectRatio: '1/1', borderRadius: 6, background: '#2a2a2a',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 11, color: '#888',
+                        }}>+{filtered.length - 20}</div>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ padding: '16px 0', textAlign: 'center', color: '#555', fontSize: 12 }}>
+                      該当する写真がありません
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* フッターボタン */}
+              <div style={{
+                padding: '12px 16px', flexShrink: 0,
+                borderTop: '1px solid rgba(255,255,255,0.08)',
+                display: 'flex', gap: 8,
+              }}>
+                <button
+                  onClick={() => { setPendingStockPhotos([]); setShowDateFilter(false); }}
+                  style={{
+                    flex: 1, padding: '11px', borderRadius: 10,
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    background: 'transparent', color: '#aaa',
+                    fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  }}
+                >キャンセル</button>
+                <button
+                  disabled={filtered.length === 0}
+                  onClick={() => {
+                    setPhotoStock(prev => [...prev, ...filtered]);
+                    setPendingStockPhotos([]);
+                    setShowDateFilter(false);
+                  }}
+                  style={{
+                    flex: 2, padding: '11px', borderRadius: 10, border: 'none',
+                    background: filtered.length > 0 ? '#f26b9a' : '#444',
+                    color: '#fff', fontSize: 13, fontWeight: 700,
+                    cursor: filtered.length > 0 ? 'pointer' : 'default',
+                  }}
+                >
+                  {filtered.length}枚をストックに追加
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ===== ストック整理モーダル ===== */}
+      {showStockOrganizer && (
+        <div
+          onClick={() => setShowStockOrganizer(false)}
+          style={{
+            position: 'fixed', inset: 0,
+            background: 'rgba(0,0,0,0.75)',
+            zIndex: 10001,
+            display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: '100%', maxWidth: 500,
+              background: '#1e1e1e',
+              borderRadius: '16px 16px 0 0',
+              paddingBottom: 'env(safe-area-inset-bottom)',
+              maxHeight: '85dvh',
+              display: 'flex', flexDirection: 'column',
+            }}
+          >
+            {/* ヘッダー */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '14px 16px 10px',
+              borderBottom: '1px solid rgba(255,255,255,0.1)',
+              flexShrink: 0,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>ストックを整理する</span>
+                <span style={{ fontSize: 12, color: '#aaa' }}>{photoStock.length}枚</span>
+              </div>
+              <button
+                onClick={() => setShowStockOrganizer(false)}
+                style={{ background: 'none', border: 'none', color: '#aaa', fontSize: 20, cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}
+              >✕</button>
+            </div>
+
+            {/* 操作バー */}
+            <div style={{
+              display: 'flex', gap: 8, padding: '10px 14px',
+              borderBottom: '1px solid rgba(255,255,255,0.08)',
+              flexShrink: 0, alignItems: 'center', flexWrap: 'wrap',
+            }}>
+              <button
+                onClick={() => document.getElementById('photo-stock-add-organizer')?.click()}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '7px 12px', borderRadius: 8,
+                  border: '1.5px dashed rgba(242,107,154,0.7)',
+                  background: 'rgba(242,107,154,0.10)',
+                  color: '#f26b9a', fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0,
+                }}
+              >＋ 写真を追加</button>
+              <button
+                onClick={() => {
+                  if (stockDeleteSelected.size === photoStock.length) {
+                    setStockDeleteSelected(new Set());
+                  } else {
+                    setStockDeleteSelected(new Set(photoStock.map((_, i) => i)));
+                  }
+                }}
+                style={{
+                  padding: '7px 12px', borderRadius: 8,
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  background: 'transparent',
+                  color: '#ccc', fontSize: 12, cursor: 'pointer', flexShrink: 0,
+                }}
+              >
+                {stockDeleteSelected.size === photoStock.length && photoStock.length > 0 ? '全解除' : '全選択'}
+              </button>
+              {stockDeleteSelected.size > 0 && (
+                <button
+                  onClick={() => {
+                    setPhotoStock(prev => prev.filter((_, i) => !stockDeleteSelected.has(i)));
+                    setStockDeleteSelected(new Set());
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 5,
+                    marginLeft: 'auto', padding: '7px 12px', borderRadius: 8,
+                    border: 'none', background: 'rgba(220,60,60,0.85)',
+                    color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0,
+                  }}
+                >🗑️ {stockDeleteSelected.size}枚削除</button>
+              )}
+            </div>
+
+            {/* サムネイルグリッド（日付グループ表示） */}
+            <div style={{ overflowY: 'auto', padding: '10px 12px', flex: 1 }}>
+              {(() => {
+                // 日付でグループ化（撮影日あり→日付順、なし→末尾）
+                type Group = { label: string; indices: number[] };
+                const groups: Group[] = [];
+                const groupMap: Record<string, number[]> = {};
+                const noDateIndices: number[] = [];
+                photoStock.forEach((p, i) => {
+                  if (!p.takenAt) { noDateIndices.push(i); return; }
+                  const key = `${p.takenAt.getFullYear()}年${p.takenAt.getMonth()+1}月${p.takenAt.getDate()}日`;
+                  if (!groupMap[key]) groupMap[key] = [];
+                  groupMap[key].push(i);
+                });
+                // 日付昇順でソート
+                Object.entries(groupMap)
+                  .sort((a, b) => a[0] < b[0] ? -1 : 1)
+                  .forEach(([label, indices]) => groups.push({ label, indices }));
+                if (noDateIndices.length > 0) groups.push({ label: '日付不明', indices: noDateIndices });
+
+                if (groups.length === 0) {
+                  return (
+                    <div style={{ padding: '32px 0', textAlign: 'center', color: '#666', fontSize: 13 }}>
+                      ストックに写真がありません
+                    </div>
+                  );
+                }
+
+                return groups.map(group => (
+                  <div key={group.label} style={{ marginBottom: 14 }}>
+                    {/* グループヘッダー */}
+                    <div style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      marginBottom: 6,
+                    }}>
+                      <span style={{ fontSize: 11, color: '#aaa', fontWeight: 600 }}>{group.label}</span>
+                      <button
+                        onClick={() => {
+                          const allSelected = group.indices.every(i => stockDeleteSelected.has(i));
+                          setStockDeleteSelected(prev => {
+                            const next = new Set(prev);
+                            if (allSelected) { group.indices.forEach(i => next.delete(i)); }
+                            else { group.indices.forEach(i => next.add(i)); }
+                            return next;
+                          });
+                        }}
+                        style={{
+                          fontSize: 10, color: '#888', background: 'none',
+                          border: 'none', cursor: 'pointer', padding: '2px 6px',
+                        }}
+                      >
+                        {group.indices.every(i => stockDeleteSelected.has(i)) ? '解除' : 'この日を選択'}
+                      </button>
+                    </div>
+                    {/* グリッド */}
+                    <div style={{
+                      display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6,
+                    }}>
+                      {group.indices.map(idx => {
+                        const p = photoStock[idx];
+                        const checked = stockDeleteSelected.has(idx);
+                        return (
+                          <div
+                            key={idx}
+                            onClick={() => setStockDeleteSelected(prev => {
+                              const next = new Set(prev);
+                              if (next.has(idx)) next.delete(idx); else next.add(idx);
+                              return next;
+                            })}
+                            style={{
+                              position: 'relative', aspectRatio: '1/1',
+                              borderRadius: 8, overflow: 'hidden',
+                              border: checked ? '2.5px solid #f26b9a' : '2px solid rgba(255,255,255,0.07)',
+                              cursor: 'pointer', transition: 'border-color 0.12s',
+                            }}
+                          >
+                            <img src={p.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                            {/* チェックマーク */}
+                            <div style={{
+                              position: 'absolute', top: 5, right: 5,
+                              width: 20, height: 20, borderRadius: '50%',
+                              background: checked ? '#f26b9a' : 'rgba(0,0,0,0.45)',
+                              border: `2px solid ${checked ? '#fff' : 'rgba(255,255,255,0.5)'}`,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              transition: 'background 0.12s',
+                            }}>
+                              {checked && (
+                                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                                  <path d="M1.5 5 L4 7.5 L8.5 2.5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
+
+            {/* フッター */}
+            <div style={{
+              padding: '12px 16px', flexShrink: 0,
+              borderTop: '1px solid rgba(255,255,255,0.08)',
+            }}>
+              <button
+                onClick={() => { setStockDeleteSelected(new Set()); setShowStockOrganizer(false); }}
+                style={{
+                  width: '100%', padding: '12px', borderRadius: 10, border: 'none',
+                  background: '#3b4f7a', color: '#fff',
+                  fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                }}
+              >完了（{photoStock.length}枚）</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {cropImageUrl && (
         <CropModal imageUrl={cropImageUrl} initialShape={cropInitialShape} onComplete={handleCropComplete} onCancel={() => { setCropImageUrl(null); setTargetSlotId(null); setCropInitialShape(undefined); }} />
