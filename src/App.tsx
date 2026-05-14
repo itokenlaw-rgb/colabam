@@ -1822,12 +1822,15 @@ export default function App() {
           </div>
         )}
         <div className="main-tabs">
-          <button className={`tab-btn ${activeMainTab === 'template' ? 'active' : ''}`} onClick={() => handleTabToggle('template')}>
-            <LayoutTemplate size={20} /><span>写真枠配置</span>
-          </button>
-          <button className={`tab-btn ${activeMainTab === 'background' ? 'active' : ''}`} onClick={() => handleTabToggle('background')}>
-            <Grid size={20} /><span>背景変更</span>
-          </button>
+{/* 1. 背景変更を一番左に移動 */}
+  <button className={`tab-btn ${activeMainTab === 'background' ? 'active' : ''}`} onClick={() => handleTabToggle('background')}>
+    <Grid size={20} /><span>背景変更</span>
+  </button>
+
+  {/* 2. 写真枠配置を左から二番目に移動 */}
+  <button className={`tab-btn ${activeMainTab === 'template' ? 'active' : ''}`} onClick={() => handleTabToggle('template')}>
+    <LayoutTemplate size={20} /><span>写真枠配置</span>
+  </button>
           <div style={{ position: 'relative', display: 'contents' }} ref={photoAddMenuRef}>
             <button
               className={`tab-btn ${showPhotoAddMenu ? 'active' : ''}`}
