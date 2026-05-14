@@ -501,9 +501,10 @@ interface RotateHandleProps {
   itemH: number;
   rotation: number;
   onRotate: (id: string, newRotation: number) => void;
+  position?: 'topLeft' | 'bottomRight';
 }
 
-function RotateHandle({ itemId, itemX, itemY, itemW, itemH, rotation, onRotate }: RotateHandleProps) {
+function RotateHandle({ itemId, itemX, itemY, itemW, itemH, rotation, onRotate, position = 'bottomRight' }: RotateHandleProps) {
   const isDragging = useRef(false);
   const startAngleOffset = useRef(0); // 追加：開始時の角度差分を保存
 
@@ -555,6 +556,7 @@ function RotateHandle({ itemId, itemX, itemY, itemW, itemH, rotation, onRotate }
       className="rotate-handle"
       onPointerDown={handlePointerDown}
       title="ドラッグで回転"
+      style={position === 'topLeft' ? { bottom: 'auto', right: 'auto', top: -14, left: -14 } : undefined}
     >
       {/* SVG内容はそのまま */}
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1887,10 +1889,10 @@ export default function App() {
                 dragHandleClassName="drag-handle"
                 enableResizing={isSelected ? undefined : false}
                 resizeHandleStyles={isSelected ? {
-                  bottomRight: { display: 'none' },
+                  topLeft: { display: 'none' },
                 } : {}}
                 resizeHandleComponent={isSelected ? {
-                  topLeft: (
+                  bottomRight: (
                     <div
                       style={{
                         width: 22,
@@ -1901,16 +1903,16 @@ export default function App() {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        cursor: 'nw-resize',
+                        cursor: 'se-resize',
                         boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
                         position: 'absolute',
-                        top: -2,
-                        left: -2,
+                        bottom: -2,
+                        right: -2,
                       }}
                     >
                       <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                        <path d="M2 10 L2 2 L10 2" stroke="#f26b9a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-                        <path d="M2 2 L6 6" stroke="#f26b9a" strokeWidth="1.5" strokeLinecap="round" opacity="0.5"/>
+                        <path d="M2 10 L10 10 L10 2" stroke="#f26b9a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M10 10 L6 6" stroke="#f26b9a" strokeWidth="1.5" strokeLinecap="round" opacity="0.5"/>
                       </svg>
                     </div>
                   ),
@@ -2034,6 +2036,7 @@ export default function App() {
                     itemH={item.height}
                     rotation={item.rotation}
                     onRotate={handleItemRotate}
+                    position="topLeft"
                   />
                 )}
               </Rnd>
