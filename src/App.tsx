@@ -634,23 +634,34 @@ interface StampCategoryDef {
 }
 
 const STAMP_CATEGORIES: StampCategoryDef[] = [
-  { id: 'with-bg', label: '背景あり' },
-  { id: 'no-bg',   label: '背景なし' },
+  { id: 'no-bg',   label: 'メッセージ' },
+  { id: 'with-bg', label: 'プレート' },
 ];
 
 // ファイルを追加するときはここに追記するだけでOK
+// 001〜012 と 101〜112 の2シリーズ（計24枚）に対応
 const STAMP_FILES: Record<StampCategory, string[]> = {
-  'with-bg': Array.from({ length: 12 }, (_, i) =>
-    `/stamps/with-bg/colabammojiimg${String(i + 1).padStart(3, '0')}.jpg`
-  ),
-  'no-bg': Array.from({ length: 12 }, (_, i) =>
-    `/stamps/no-bg/colabammojitouka${String(i + 1).padStart(3, '0')}.png`
-  ),
+  'no-bg': [
+    ...Array.from({ length: 12 }, (_, i) =>
+      `/stamps/no-bg/colabammojitouka${String(i + 1).padStart(3, '0')}.png`
+    ),
+    ...Array.from({ length: 12 }, (_, i) =>
+      `/stamps/no-bg/colabammojitouka${String(i + 101).padStart(3, '0')}.png`
+    ),
+  ],
+  'with-bg': [
+    ...Array.from({ length: 12 }, (_, i) =>
+      `/stamps/with-bg/colabammojiimg${String(i + 1).padStart(3, '0')}.jpg`
+    ),
+    ...Array.from({ length: 12 }, (_, i) =>
+      `/stamps/with-bg/colabammojiimg${String(i + 101).padStart(3, '0')}.jpg`
+    ),
+  ],
 };
 
 // ===== スタンプメニューコンポーネント =====
 function StampMenu({ onAdd }: { onAdd: (url: string) => void }) {
-  const [activeCategory, setActiveCategory] = useState<StampCategory>('with-bg');
+  const [activeCategory, setActiveCategory] = useState<StampCategory>('no-bg');
   const files = STAMP_FILES[activeCategory];
 
   return (
@@ -682,7 +693,7 @@ function StampMenu({ onAdd }: { onAdd: (url: string) => void }) {
           </code>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, overflowY: 'auto', paddingBottom: 4 }}>
+        <div style={{ display: 'flex', flexWrap: 'nowrap', gap: 8, overflowX: 'auto', overflowY: 'hidden', paddingBottom: 4 }}>
           {files.map((src, i) => (
             <button
               key={src}
