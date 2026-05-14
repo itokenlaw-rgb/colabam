@@ -1919,14 +1919,22 @@ export default function App() {
                 } : {}}
               >
                 <div
-                  className={`canvas-item-wrapper ${isSelected ? 'selected' : ''}`}
+                  className={`canvas-item-wrapper drag-handle ${isSelected ? 'selected' : ''}`}
                   style={{
                     transform: `rotate(${item.rotation}deg)`,
                     ...(item.clipShape || item.slotStyle ? { background: 'transparent' } : {}),
                   }}
-                  onPointerDown={(e) => { e.stopPropagation(); }}
-                  onClick={(e) => {
+                  onPointerDown={(e) => {
                     e.stopPropagation();
+                    (e.currentTarget as HTMLElement).dataset.pointerDownX = String(e.clientX);
+                    (e.currentTarget as HTMLElement).dataset.pointerDownY = String(e.clientY);
+                  }}
+                  onPointerUp={(e) => {
+                    e.stopPropagation();
+                    const el = e.currentTarget as HTMLElement;
+                    const dx = Math.abs(e.clientX - Number(el.dataset.pointerDownX ?? e.clientX));
+                    const dy = Math.abs(e.clientY - Number(el.dataset.pointerDownY ?? e.clientY));
+                    if (dx > 8 || dy > 8) return; // ドラッグは無視
                     setSelectedId(item.id);
                     const canvasEl = canvasRef.current;
                     const getMenuPos = () => {
@@ -1963,6 +1971,7 @@ export default function App() {
                       setItemSubMenuPos(null);
                     }
                   }}
+                  onClick={(e) => { e.stopPropagation(); }}
                 >
                   {item.type === 'text' ? (
                     (() => {
@@ -2085,7 +2094,8 @@ export default function App() {
               <button
                 key={action.label}
                 onPointerDown={e => e.stopPropagation()}
-                onClick={(e) => { e.stopPropagation(); action.onClick(); }}
+                onPointerUp={(e) => { e.stopPropagation(); action.onClick(); }}
+                onClick={(e) => { e.stopPropagation(); }}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -2149,7 +2159,8 @@ export default function App() {
               <button
                 key={action.label}
                 onPointerDown={e => e.stopPropagation()}
-                onClick={(e) => { e.stopPropagation(); action.onClick(); }}
+                onPointerUp={(e) => { e.stopPropagation(); action.onClick(); }}
+                onClick={(e) => { e.stopPropagation(); }}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
