@@ -165,6 +165,7 @@ interface CanvasItem {
   clipShape?: ClipShape;
   textStyle?: TextStyleId;
   fontFamily?: string;
+  slotStyle?: React.CSSProperties; // 枠から引き継いだborderRadius/clipPath
 }
 
 // 3:4 キャンバスサイズ（表示用px）
@@ -484,9 +485,19 @@ type BgState = {
   patternType: string;
   gradientDir: string;
   bgImage?: string; // 背景画像URL（設定時はこちらが優先）
+  bgPhotoOpacity?: number; // 写真背景の不透明度 0〜1（1=そのまま, 0=白）
+  bgPhotoUrl?: string; // デバイス写真から選んだ背景URL
 };
 
 function getCanvasBgStyle(bg: BgState): React.CSSProperties {
+  if (bg.bgPhotoUrl) {
+    return {
+      backgroundImage: `url(${bg.bgPhotoUrl})`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      position: 'relative',
+    };
+  }
   if (bg.bgImage) {
     return {
       backgroundImage: `url(${bg.bgImage})`,
@@ -786,18 +797,33 @@ function BgMenu({ canvasBg, setCanvasBg }: {
   setCanvasBg: React.Dispatch<React.SetStateAction<BgState>>;
 }) {
   const [colorTarget, setColorTarget] = useState<'primary' | 'secondary'>('primary');
-  const [bgTab, setBgTab] = useState<'color' | 'image'>('image');
+  const [bgTab, setBgTab] = useState<'color' | 'image' | 'photo'>('image');
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const currentColor = colorTarget === 'primary' ? canvasBg.color : canvasBg.color2;
   const setColor = (c: string) => {
-    setCanvasBg(prev => colorTarget === 'primary' ? { ...prev, color: c, bgImage: undefined } : { ...prev, color2: c });
+    setCanvasBg(prev => colorTarget === 'primary' ? { ...prev, color: c, bgImage: undefined, bgPhotoUrl: undefined } : { ...prev, color2: c });
   };
 
   const needsColor2 = canvasBg.patternType !== 'solid';
 
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const url = ev.target?.result as string;
+      setCanvasBg(prev => ({ ...prev, bgPhotoUrl: url, bgImage: undefined, bgPhotoOpacity: prev.bgPhotoOpacity ?? 1 }));
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const opacity = canvasBg.bgPhotoOpacity ?? 1;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {/* タブ切替：背景画像 / カラー */}
+      {/* タブ切替：背景画像 / カラー / 写真から選ぶ */}
       <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
         <button
           onClick={() => setBgTab('image')}
@@ -813,6 +839,13 @@ function BgMenu({ canvasBg, setCanvasBg }: {
             background: bgTab === 'color' ? '#fff0f5' : 'white', cursor: 'pointer', fontSize: 11, fontWeight: bgTab === 'color' ? 'bold' : 'normal', color: bgTab === 'color' ? 'var(--primary)' : '#555',
           }}
         >🎨 カラー</button>
+        <button
+          onClick={() => setBgTab('photo')}
+          style={{
+            flex: 1, padding: '3px 0', borderRadius: 6, border: `2px solid ${bgTab === 'photo' ? 'var(--primary)' : '#ddd'}`,
+            background: bgTab === 'photo' ? '#fff0f5' : 'white', cursor: 'pointer', fontSize: 11, fontWeight: bgTab === 'photo' ? 'bold' : 'normal', color: bgTab === 'photo' ? 'var(--primary)' : '#555',
+          }}
+        >📷 写真</button>
       </div>
 
       {bgTab === 'color' && (
@@ -822,11 +855,11 @@ function BgMenu({ canvasBg, setCanvasBg }: {
             {PATTERN_DEFS.map(p => (
               <button
                 key={p.id}
-                onClick={() => setCanvasBg(prev => ({ ...prev, patternType: p.id, pattern: 'none', bgImage: undefined }))}
+                onClick={() => setCanvasBg(prev => ({ ...prev, patternType: p.id, pattern: 'none', bgImage: undefined, bgPhotoUrl: undefined }))}
                 style={{
                   display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-                  border: `2px solid ${canvasBg.patternType === p.id && !canvasBg.bgImage ? 'var(--primary)' : '#ddd'}`,
-                  borderRadius: 8, background: canvasBg.patternType === p.id && !canvasBg.bgImage ? '#fff0f5' : 'white',
+                  border: `2px solid ${canvasBg.patternType === p.id && !canvasBg.bgImage && !canvasBg.bgPhotoUrl ? 'var(--primary)' : '#ddd'}`,
+                  borderRadius: 8, background: canvasBg.patternType === p.id && !canvasBg.bgImage && !canvasBg.bgPhotoUrl ? '#fff0f5' : 'white',
                   padding: '3px 6px', cursor: 'pointer', minWidth: 40, flexShrink: 0,
                 }}
               >
@@ -909,6 +942,93 @@ function BgMenu({ canvasBg, setCanvasBg }: {
       {bgTab === 'image' && (
         <ImageBgTab canvasBg={canvasBg} setCanvasBg={setCanvasBg} />
       )}
+
+      {bgTab === 'photo' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {/* 写真選択ボタン */}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              onClick={() => photoInputRef.current?.click()}
+              style={{
+                flex: 1, padding: '8px 12px', borderRadius: 8,
+                border: '2px dashed var(--primary)', background: '#fff0f5',
+                color: 'var(--primary)', fontSize: 12, fontWeight: 'bold',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}
+            >
+              <span style={{ fontSize: 16 }}>📷</span>
+              {canvasBg.bgPhotoUrl ? '写真を変更する' : 'デバイスから写真を選ぶ'}
+            </button>
+            {canvasBg.bgPhotoUrl && (
+              <button
+                onClick={() => setCanvasBg(prev => ({ ...prev, bgPhotoUrl: undefined }))}
+                style={{
+                  padding: '8px 10px', borderRadius: 8, border: '1px solid #ddd',
+                  background: 'white', color: '#888', fontSize: 11, cursor: 'pointer',
+                }}
+              >✕ 解除</button>
+            )}
+          </div>
+
+          {/* プレビューサムネイル */}
+          {canvasBg.bgPhotoUrl && (
+            <div style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid #eee', height: 60, position: 'relative', flexShrink: 0 }}>
+              <img
+                src={canvasBg.bgPhotoUrl}
+                alt="背景プレビュー"
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              />
+              <div style={{
+                position: 'absolute', inset: 0,
+                background: `rgba(255,255,255,${1 - opacity})`,
+                pointerEvents: 'none',
+              }} />
+            </div>
+          )}
+
+          {/* 薄さ調整スライダー */}
+          {canvasBg.bgPhotoUrl && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 11, color: '#666', fontWeight: 'bold' }}>🌫️ 薄さ調整（白っぽくする）</span>
+                <span style={{ fontSize: 11, color: 'var(--primary)', fontWeight: 'bold', minWidth: 32, textAlign: 'right' }}>
+                  {Math.round((1 - opacity) * 100)}%
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 10, color: '#aaa', whiteSpace: 'nowrap' }}>そのまま</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={95}
+                  step={1}
+                  value={Math.round((1 - opacity) * 100)}
+                  onChange={e => {
+                    const whiteness = parseInt(e.target.value) / 100;
+                    setCanvasBg(prev => ({ ...prev, bgPhotoOpacity: 1 - whiteness }));
+                  }}
+                  style={{ flex: 1, accentColor: 'var(--primary)', cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: 10, color: '#aaa', whiteSpace: 'nowrap' }}>白く</span>
+              </div>
+            </div>
+          )}
+
+          {!canvasBg.bgPhotoUrl && (
+            <div style={{ textAlign: 'center', color: '#bbb', fontSize: 11, padding: '8px 0' }}>
+              写真を選ぶと背景に設定されます
+            </div>
+          )}
+
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={handlePhotoSelect}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -928,7 +1048,9 @@ export default function App() {
     patternType: string;   // 新しいパターン種別
     gradientDir: string;   // グラデーション方向 'to bottom' | 'to right' | '135deg' etc.
     bgImage?: string;      // 背景画像URL（設定時はこちらが優先）
-  }>({ color: '#fffbe6', color2: '#f26b9a', pattern: 'none', patternType: 'solid', gradientDir: 'to bottom', bgImage: undefined });
+    bgPhotoOpacity?: number; // 写真背景の不透明度 0〜1
+    bgPhotoUrl?: string;   // デバイス写真から選んだ背景URL
+  }>({ color: '#fffbe6', color2: '#f26b9a', pattern: 'none', patternType: 'solid', gradientDir: 'to bottom', bgImage: undefined, bgPhotoOpacity: 1, bgPhotoUrl: undefined });
   const [targetSlotId, setTargetSlotId] = useState<string | null>(null);
   const [cropImageUrl, setCropImageUrl] = useState<string | null>(null);
   const [cropInitialShape, setCropInitialShape] = useState<'square' | 'rectangle' | 'rectangle-h' | 'circle' | 'ellipse' | 'ellipse-h' | 'heart' | 'star' | undefined>(undefined);
@@ -1058,7 +1180,7 @@ export default function App() {
     pushHistory(items);
     setItems([]);
     setTemplateSlots([]);
-    setCanvasBg({ color: '#fffbe6', color2: '#f26b9a', pattern: 'none', patternType: 'solid', gradientDir: 'to bottom', bgImage: undefined });
+    setCanvasBg({ color: '#fffbe6', color2: '#f26b9a', pattern: 'none', patternType: 'solid', gradientDir: 'to bottom', bgImage: undefined, bgPhotoOpacity: 1, bgPhotoUrl: undefined });
   };
 
   // アップロード時の元画像URLを一時保持するref（クロップ完了時にCanvasItemへ渡す）
@@ -1296,6 +1418,28 @@ export default function App() {
     setShowPhotoAddMenu(false);
   };
 
+  // スロットのstyleからClipShapeを判定するヘルパー
+  const slotStyleToClipShape = (slot: SlotData): ClipShape | undefined => {
+    const style = slot.style ?? {};
+    const clipPath = (style as React.CSSProperties).clipPath as string | undefined;
+    if (!clipPath) return undefined;
+    if (clipPath.includes('50% 25%') || clipPath.includes('50% 15%')) return 'heart';
+    if (clipPath.includes('61.8%') || clipPath.includes('61% 35%')) return 'star';
+    if (clipPath.includes('75%, 75% 75%') || clipPath.includes('75% 75%')) return 'bubble';
+    return undefined;
+  };
+
+  // スロットのstyleからCanvasItemに適用するstyleを生成するヘルパー
+  const slotStyleToItemStyle = (slot: SlotData): React.CSSProperties => {
+    const style = slot.style ?? {};
+    const borderRadius = (style as React.CSSProperties).borderRadius;
+    const clipPath = (style as React.CSSProperties).clipPath as string | undefined;
+    const result: React.CSSProperties = {};
+    if (borderRadius) result.borderRadius = borderRadius;
+    if (clipPath) result.clipPath = clipPath;
+    return result;
+  };
+
   // 枠を全部埋める（ストックからランダム）
   const handleFillAllSlots = () => {
     if (photoStock.length === 0) {
@@ -1311,6 +1455,7 @@ export default function App() {
     const newItems: CanvasItem[] = templateSlots.map((slot, i) => {
       const imgUrl = shuffled[i % shuffled.length];
       maxZIndex.current += 1;
+      const clipShape = slotStyleToClipShape(slot);
       return {
         id: `photo-slot-${slot.id}-${Date.now()}-${i}`,
         type: 'photo' as ItemType,
@@ -1322,7 +1467,11 @@ export default function App() {
         height: slot.height,
         rotation: slot.rotation ?? 0,
         zIndex: maxZIndex.current,
-        clipShape: undefined,
+        clipShape,
+        // borderRadius（円・楕円）やclipPath（ハート・星）をslotStyleとして保持
+        ...(Object.keys(slotStyleToItemStyle(slot)).length > 0
+          ? { slotStyle: slotStyleToItemStyle(slot) }
+          : {}),
       };
     });
     setItems(prev => [...prev, ...newItems]);
@@ -1566,6 +1715,15 @@ export default function App() {
           className="album-canvas"
           style={{ width: CANVAS_W, height: CANVAS_H, ...getCanvasBgStyle(canvasBg) }}
         >
+          {/* 写真背景の薄さオーバーレイ */}
+          {canvasBg.bgPhotoUrl && (canvasBg.bgPhotoOpacity ?? 1) < 1 && (
+            <div style={{
+              position: 'absolute', inset: 0,
+              background: `rgba(255,255,255,${1 - (canvasBg.bgPhotoOpacity ?? 1)})`,
+              pointerEvents: 'none',
+              zIndex: 0,
+            }} />
+          )}
           {/* SVGパターンオーバーレイ（格子・水玉・ストライプ・星） */}
           {!canvasBg.bgImage && canvasBg.patternType !== 'solid' && canvasBg.patternType !== 'gradient' && (
             <BgPatternSvg patternType={canvasBg.patternType} color={canvasBg.color} color2={canvasBg.color2} width={CANVAS_W} height={CANVAS_H} />
@@ -1645,7 +1803,7 @@ export default function App() {
                   className={`canvas-item-wrapper ${isSelected ? 'selected' : ''}`}
                   style={{
                     transform: `rotate(${item.rotation}deg)`,
-                    ...(item.clipShape ? { background: 'transparent' } : {}),
+                    ...(item.clipShape || item.slotStyle ? { background: 'transparent' } : {}),
                   }}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -1711,7 +1869,13 @@ export default function App() {
                       src={item.content}
                       className="item-photo drag-handle"
                       alt=""
-                      style={item.clipShape ? getClipPathStyle(item.clipShape) : undefined}
+                      style={
+                        item.clipShape
+                          ? getClipPathStyle(item.clipShape)
+                          : item.slotStyle
+                            ? item.slotStyle
+                            : undefined
+                      }
                     />
                   )}
                 </div>
