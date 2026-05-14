@@ -8,6 +8,93 @@ import {
 import CropModal from './CropModal';
 import './index.css';
 
+// ===== ストック写真の型 =====
+interface StockPhoto {
+  url: string;
+  takenAt: Date | null; // Exifから取得した撮影日時（取得できない場合はnull）
+  fileName: string;
+}
+
+// Exif から撮影日時を取得するユーティリティ
+function extractExifDate(file: File): Promise<Date | null> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const buf = e.target?.result as ArrayBuffer;
+        const view = new DataView(buf);
+        // JPEGマジックナンバー確認
+        if (view.getUint16(0) !== 0xFFD8) { resolve(null); return; }
+        let offset = 2;
+        while (offset < view.byteLength - 2) {
+          const marker = view.getUint16(offset);
+          offset += 2;
+          if (marker === 0xFFE1) { // APP1 (Exif)
+            const segLen = view.getUint16(offset);
+            const exifHeader = String.fromCharCode(
+              view.getUint8(offset + 2), view.getUint8(offset + 3),
+              view.getUint8(offset + 4), view.getUint8(offset + 5)
+            );
+            if (exifHeader !== 'Exif') { resolve(null); return; }
+            const tiffStart = offset + 8;
+            const byteOrder = view.getUint16(tiffStart);
+            const isLE = byteOrder === 0x4949;
+            const getU16 = (o: number) => isLE ? view.getUint16(o, true) : view.getUint16(o, false);
+            const getU32 = (o: number) => isLE ? view.getUint32(o, true) : view.getUint32(o, false);
+            const ifdOffset = getU32(tiffStart + 4);
+            const numEntries = getU16(tiffStart + ifdOffset);
+            for (let i = 0; i < numEntries; i++) {
+              const entryOffset = tiffStart + ifdOffset + 2 + i * 12;
+              const tag = getU16(entryOffset);
+              // 0x9003: DateTimeOriginal
+              if (tag === 0x9003 || tag === 0x0132) {
+                const type = getU16(entryOffset + 2);
+                const count = getU32(entryOffset + 4);
+                const valueOffset = count > 4
+                  ? tiffStart + getU32(entryOffset + 8)
+                  : entryOffset + 8;
+                let dateStr = '';
+                for (let j = 0; j < Math.min(count - 1, 19); j++) {
+                  const ch = view.getUint8(valueOffset + j);
+                  if (ch === 0) break;
+                  dateStr += String.fromCharCode(ch);
+                }
+                // "2024:03:15 14:30:00" → Date
+                const m = dateStr.match(/^(\d{4}):(\d{2}):(\d{2})/);
+                if (m) {
+                  resolve(new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3])));
+                  return;
+                }
+              }
+            }
+            resolve(null); return;
+          } else {
+            const segLen = view.getUint16(offset);
+            offset += segLen;
+          }
+        }
+        resolve(null);
+      } catch { resolve(null); }
+    };
+    reader.onerror = () => resolve(null);
+    // 最初の64KBだけ読めばExifは十分
+    reader.readAsArrayBuffer(file.slice(0, 65536));
+  });
+}
+
+// ファイルをStockPhotoに変換
+async function fileToStockPhoto(file: File): Promise<StockPhoto> {
+  const [url, takenAt] = await Promise.all([
+    new Promise<string>(res => {
+      const r = new FileReader();
+      r.onload = e => res(e.target?.result as string);
+      r.readAsDataURL(file);
+    }),
+    extractExifDate(file),
+  ]);
+  return { url, takenAt, fileName: file.name };
+}
+
 // ===== Types =====
 type ItemType = 'photo' | 'stamp' | 'text';
 type MainTab = 'template' | 'stamp' | 'text' | 'background' | 'photo';
@@ -1071,10 +1158,18 @@ export default function App() {
   const [retrimTargetId, setRetrimTargetId] = useState<string | null>(null);
 
   // 写真ストック（複数枚事前選択）
-  const [photoStock, setPhotoStock] = useState<string[]>([]);
+  const [photoStock, setPhotoStock] = useState<StockPhoto[]>([]);
   // 写真追加サブメニューの表示
   const [showPhotoAddMenu, setShowPhotoAddMenu] = useState(false);
   const photoAddMenuRef = useRef<HTMLDivElement>(null);
+  // ストック整理モーダル
+  const [showStockOrganizer, setShowStockOrganizer] = useState(false);
+  const [stockDeleteSelected, setStockDeleteSelected] = useState<Set<number>>(new Set());
+  // 日付フィルタ確認モーダル（ストック追加時）
+  const [pendingStockPhotos, setPendingStockPhotos] = useState<StockPhoto[]>([]);
+  const [showDateFilter, setShowDateFilter] = useState(false);
+  const [dateFilterFrom, setDateFilterFrom] = useState('');
+  const [dateFilterTo, setDateFilterTo] = useState('');
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const maxZIndex = useRef(10);
@@ -1402,20 +1497,28 @@ export default function App() {
     setTargetSlotId('__retrim__');
   };
 
-  // ストックへ複数枚追加
-  const handleStockFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ストックへ複数枚追加（Exif日付付き）
+  const handleStockFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     if (files.length === 0) return;
-    const readers = files.map(file => new Promise<string>((resolve) => {
-      const reader = new FileReader();
-      reader.onload = (ev) => resolve(ev.target?.result as string);
-      reader.readAsDataURL(file);
-    }));
-    Promise.all(readers).then(urls => {
-      setPhotoStock(prev => [...prev, ...urls]);
-    });
     e.target.value = '';
     setShowPhotoAddMenu(false);
+    const photos = await Promise.all(files.map(fileToStockPhoto));
+    // Exif日付を持つ写真が1枚以上あれば日付フィルタUIを表示
+    const hasDate = photos.some(p => p.takenAt !== null);
+    if (hasDate && photos.length > 1) {
+      // 日付範囲の初期値：選んだ写真の最古〜最新
+      const dates = photos.filter(p => p.takenAt).map(p => p.takenAt!);
+      const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
+      const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
+      const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      setDateFilterFrom(fmt(minDate));
+      setDateFilterTo(fmt(maxDate));
+      setPendingStockPhotos(photos);
+      setShowDateFilter(true);
+    } else {
+      setPhotoStock(prev => [...prev, ...photos]);
+    }
   };
 
   // スロットのstyleからClipShapeを判定するヘルパー
@@ -1453,7 +1556,7 @@ export default function App() {
     pushHistory(items);
     const shuffled = [...photoStock].sort(() => Math.random() - 0.5);
     const newItems: CanvasItem[] = templateSlots.map((slot, i) => {
-      const imgUrl = shuffled[i % shuffled.length];
+      const imgUrl = shuffled[i % shuffled.length].url;
       maxZIndex.current += 1;
       const clipShape = slotStyleToClipShape(slot);
       return {
@@ -2086,20 +2189,40 @@ export default function App() {
                   </div>
                 </button>
                 {photoStock.length > 0 && (
-                  <button
-                    onPointerDown={e => e.stopPropagation()}
-                    onClick={() => { setPhotoStock([]); setShowPhotoAddMenu(false); }}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      width: '100%', padding: '10px 16px',
-                      background: 'transparent', border: 'none',
-                      color: '#ff7070', fontSize: 12, fontWeight: 500,
-                      cursor: 'pointer', textAlign: 'left',
-                    }}
-                  >
-                    <span style={{ fontSize: 16, minWidth: 24 }}>🗑️</span>
-                    <div>ストックを全部消す（{photoStock.length}枚）</div>
-                  </button>
+                  <>
+                    <button
+                      onPointerDown={e => e.stopPropagation()}
+                      onClick={() => { setShowPhotoAddMenu(false); setStockDeleteSelected(new Set()); setShowStockOrganizer(true); }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        width: '100%', padding: '12px 16px',
+                        background: 'transparent', border: 'none',
+                        borderBottom: '1px solid rgba(255,255,255,0.1)',
+                        color: '#fff', fontSize: 13, fontWeight: 600,
+                        cursor: 'pointer', textAlign: 'left',
+                      }}
+                    >
+                      <span style={{ fontSize: 18, minWidth: 24 }}>✏️</span>
+                      <div>
+                        <div>ストックを整理する</div>
+                        <div style={{ fontSize: 10, color: '#aaa', fontWeight: 400 }}>選んで削除・追加・日付で確認</div>
+                      </div>
+                    </button>
+                    <button
+                      onPointerDown={e => e.stopPropagation()}
+                      onClick={() => { setPhotoStock([]); setShowPhotoAddMenu(false); }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        width: '100%', padding: '10px 16px',
+                        background: 'transparent', border: 'none',
+                        color: '#ff7070', fontSize: 12, fontWeight: 500,
+                        cursor: 'pointer', textAlign: 'left',
+                      }}
+                    >
+                      <span style={{ fontSize: 16, minWidth: 24 }}>🗑️</span>
+                      <div>ストックを全部消す（{photoStock.length}枚）</div>
+                    </button>
+                  </>
                 )}
               </div>
             )}
@@ -2124,6 +2247,488 @@ export default function App() {
       <input id="photo-upload" type="file" accept="image/*" onChange={handleFileUpload} style={{ display: 'none' }} />
       <input id="photo-replace-upload" type="file" accept="image/*" onChange={handleReplaceFileUpload} style={{ display: 'none' }} />
       <input id="photo-stock-upload" type="file" accept="image/*" multiple onChange={handleStockFileUpload} style={{ display: 'none' }} />
+      <input id="photo-stock-add-organizer" type="file" accept="image/*" multiple onChange={async (e) => {
+        const files = Array.from(e.target.files ?? []);
+        if (files.length === 0) return;
+        e.target.value = '';
+        const photos = await Promise.all(files.map(fileToStockPhoto));
+        setPhotoStock(prev => [...prev, ...photos]);
+      }} style={{ display: 'none' }} />
+
+      {/* ===== 日付フィルタモーダル ===== */}
+      {showDateFilter && (() => {
+        // フィルタ適用後の枚数をプレビュー
+        const from = dateFilterFrom ? new Date(dateFilterFrom) : null;
+        const to = dateFilterTo ? new Date(dateFilterTo + 'T23:59:59') : null;
+        const filtered = pendingStockPhotos.filter(p => {
+          if (!p.takenAt) return true; // 日付不明は通す
+          if (from && p.takenAt < from) return false;
+          if (to && p.takenAt > to) return false;
+          return true;
+        });
+        // 月ごとの件数サマリー
+        const monthMap: Record<string, number> = {};
+        pendingStockPhotos.forEach(p => {
+          if (!p.takenAt) return;
+          const key = `${p.takenAt.getFullYear()}年${p.takenAt.getMonth()+1}月`;
+          monthMap[key] = (monthMap[key] ?? 0) + 1;
+        });
+        const monthEntries = Object.entries(monthMap).sort((a, b) => a[0] < b[0] ? -1 : 1);
+        const noDateCount = pendingStockPhotos.filter(p => !p.takenAt).length;
+
+        return (
+          <div
+            onClick={() => {
+              setPhotoStock(prev => [...prev, ...pendingStockPhotos]);
+              setPendingStockPhotos([]);
+              setShowDateFilter(false);
+            }}
+            style={{
+              position: 'fixed', inset: 0,
+              background: 'rgba(0,0,0,0.78)',
+              zIndex: 10002,
+              display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+            }}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                width: '100%', maxWidth: 500,
+                background: '#1a1a1a',
+                borderRadius: '18px 18px 0 0',
+                paddingBottom: 'env(safe-area-inset-bottom)',
+                maxHeight: '88dvh',
+                display: 'flex', flexDirection: 'column',
+              }}
+            >
+              {/* ヘッダー */}
+              <div style={{
+                padding: '14px 16px 10px',
+                borderBottom: '1px solid rgba(255,255,255,0.1)',
+                flexShrink: 0,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>📅 日付で絞り込む</span>
+                  <button
+                    onClick={() => {
+                      setPhotoStock(prev => [...prev, ...pendingStockPhotos]);
+                      setPendingStockPhotos([]);
+                      setShowDateFilter(false);
+                    }}
+                    style={{ background: 'none', border: 'none', color: '#888', fontSize: 12, cursor: 'pointer' }}
+                  >絞り込まずに全部追加</button>
+                </div>
+                <div style={{ fontSize: 11, color: '#888' }}>
+                  選んだ {pendingStockPhotos.length} 枚から、期間を指定してストックに追加できます
+                </div>
+              </div>
+
+              <div style={{ overflowY: 'auto', flex: 1 }}>
+                {/* 月ごとサマリー */}
+                {monthEntries.length > 0 && (
+                  <div style={{ padding: '10px 16px 6px' }}>
+                    <div style={{ fontSize: 11, color: '#888', marginBottom: 6 }}>📊 写真の内訳</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {monthEntries.map(([month, count]) => (
+                        <button
+                          key={month}
+                          onClick={() => {
+                            // その月全体を範囲にセット
+                            const m = month.match(/(\d+)年(\d+)月/);
+                            if (!m) return;
+                            const y = parseInt(m[1]), mo = parseInt(m[2]);
+                            const last = new Date(y, mo, 0).getDate();
+                            setDateFilterFrom(`${y}-${String(mo).padStart(2,'0')}-01`);
+                            setDateFilterTo(`${y}-${String(mo).padStart(2,'0')}-${String(last).padStart(2,'0')}`);
+                          }}
+                          style={{
+                            padding: '4px 10px', borderRadius: 20,
+                            border: '1.5px solid rgba(242,107,154,0.5)',
+                            background: 'rgba(242,107,154,0.10)',
+                            color: '#f26b9a', fontSize: 11, cursor: 'pointer',
+                          }}
+                        >
+                          {month} ({count}枚)
+                        </button>
+                      ))}
+                      {noDateCount > 0 && (
+                        <span style={{
+                          padding: '4px 10px', borderRadius: 20,
+                          border: '1px solid rgba(255,255,255,0.1)',
+                          color: '#666', fontSize: 11,
+                        }}>日付不明 {noDateCount}枚</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* 日付範囲指定 */}
+                <div style={{ padding: '10px 16px' }}>
+                  <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>📆 期間を指定</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 10, color: '#aaa', marginBottom: 3 }}>開始日</div>
+                      <input
+                        type="date"
+                        value={dateFilterFrom}
+                        onChange={e => setDateFilterFrom(e.target.value)}
+                        style={{
+                          width: '100%', padding: '8px 10px', borderRadius: 8,
+                          border: '1.5px solid rgba(255,255,255,0.15)',
+                          background: '#2a2a2a', color: '#fff', fontSize: 13,
+                          colorScheme: 'dark',
+                        }}
+                      />
+                    </div>
+                    <span style={{ color: '#666', fontSize: 14, marginTop: 16 }}>〜</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 10, color: '#aaa', marginBottom: 3 }}>終了日</div>
+                      <input
+                        type="date"
+                        value={dateFilterTo}
+                        onChange={e => setDateFilterTo(e.target.value)}
+                        style={{
+                          width: '100%', padding: '8px 10px', borderRadius: 8,
+                          border: '1.5px solid rgba(255,255,255,0.15)',
+                          background: '#2a2a2a', color: '#fff', fontSize: 13,
+                          colorScheme: 'dark',
+                        }}
+                      />
+                    </div>
+                  </div>
+                  {/* クイック選択ボタン */}
+                  <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                    {[
+                      { label: '今月', fn: () => {
+                        const now = new Date();
+                        const y = now.getFullYear(), mo = now.getMonth()+1;
+                        const last = new Date(y, mo, 0).getDate();
+                        setDateFilterFrom(`${y}-${String(mo).padStart(2,'0')}-01`);
+                        setDateFilterTo(`${y}-${String(mo).padStart(2,'0')}-${String(last).padStart(2,'0')}`);
+                      }},
+                      { label: '先月', fn: () => {
+                        const now = new Date();
+                        const d = new Date(now.getFullYear(), now.getMonth()-1, 1);
+                        const y = d.getFullYear(), mo = d.getMonth()+1;
+                        const last = new Date(y, mo, 0).getDate();
+                        setDateFilterFrom(`${y}-${String(mo).padStart(2,'0')}-01`);
+                        setDateFilterTo(`${y}-${String(mo).padStart(2,'0')}-${String(last).padStart(2,'0')}`);
+                      }},
+                      { label: '今年', fn: () => {
+                        const y = new Date().getFullYear();
+                        setDateFilterFrom(`${y}-01-01`);
+                        setDateFilterTo(`${y}-12-31`);
+                      }},
+                      { label: '全期間', fn: () => {
+                        const dates = pendingStockPhotos.filter(p => p.takenAt).map(p => p.takenAt!);
+                        if (dates.length === 0) return;
+                        const min = new Date(Math.min(...dates.map(d => d.getTime())));
+                        const max = new Date(Math.max(...dates.map(d => d.getTime())));
+                        const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                        setDateFilterFrom(fmt(min));
+                        setDateFilterTo(fmt(max));
+                      }},
+                    ].map(btn => (
+                      <button
+                        key={btn.label}
+                        onClick={btn.fn}
+                        style={{
+                          padding: '4px 12px', borderRadius: 16,
+                          border: '1px solid rgba(255,255,255,0.18)',
+                          background: 'rgba(255,255,255,0.06)',
+                          color: '#ccc', fontSize: 11, cursor: 'pointer',
+                        }}
+                      >{btn.label}</button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* フィルタ結果プレビュー（サムネイル） */}
+                <div style={{ padding: '4px 16px 12px' }}>
+                  <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>
+                    🖼️ 絞り込み結果: <span style={{ color: filtered.length > 0 ? '#f26b9a' : '#666', fontWeight: 700 }}>{filtered.length}枚</span>
+                    {filtered.length !== pendingStockPhotos.length && (
+                      <span style={{ color: '#555' }}> / {pendingStockPhotos.length}枚中</span>
+                    )}
+                  </div>
+                  {filtered.length > 0 ? (
+                    <div style={{
+                      display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 5,
+                      maxHeight: 140, overflowY: 'auto',
+                    }}>
+                      {filtered.slice(0, 20).map((p, i) => (
+                        <div key={i} style={{ aspectRatio: '1/1', borderRadius: 6, overflow: 'hidden', position: 'relative' }}>
+                          <img src={p.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          {p.takenAt && (
+                            <div style={{
+                              position: 'absolute', bottom: 0, left: 0, right: 0,
+                              background: 'rgba(0,0,0,0.6)', fontSize: 7, color: '#ddd',
+                              padding: '1px 3px', textAlign: 'center',
+                            }}>
+                              {p.takenAt.getMonth()+1}/{p.takenAt.getDate()}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      {filtered.length > 20 && (
+                        <div style={{
+                          aspectRatio: '1/1', borderRadius: 6, background: '#2a2a2a',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 11, color: '#888',
+                        }}>+{filtered.length - 20}</div>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ padding: '16px 0', textAlign: 'center', color: '#555', fontSize: 12 }}>
+                      該当する写真がありません
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* フッターボタン */}
+              <div style={{
+                padding: '12px 16px', flexShrink: 0,
+                borderTop: '1px solid rgba(255,255,255,0.08)',
+                display: 'flex', gap: 8,
+              }}>
+                <button
+                  onClick={() => { setPendingStockPhotos([]); setShowDateFilter(false); }}
+                  style={{
+                    flex: 1, padding: '11px', borderRadius: 10,
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    background: 'transparent', color: '#aaa',
+                    fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  }}
+                >キャンセル</button>
+                <button
+                  disabled={filtered.length === 0}
+                  onClick={() => {
+                    setPhotoStock(prev => [...prev, ...filtered]);
+                    setPendingStockPhotos([]);
+                    setShowDateFilter(false);
+                  }}
+                  style={{
+                    flex: 2, padding: '11px', borderRadius: 10, border: 'none',
+                    background: filtered.length > 0 ? '#f26b9a' : '#444',
+                    color: '#fff', fontSize: 13, fontWeight: 700,
+                    cursor: filtered.length > 0 ? 'pointer' : 'default',
+                  }}
+                >
+                  {filtered.length}枚をストックに追加
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ===== ストック整理モーダル ===== */}
+      {showStockOrganizer && (
+        <div
+          onClick={() => setShowStockOrganizer(false)}
+          style={{
+            position: 'fixed', inset: 0,
+            background: 'rgba(0,0,0,0.75)',
+            zIndex: 10001,
+            display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: '100%', maxWidth: 500,
+              background: '#1e1e1e',
+              borderRadius: '16px 16px 0 0',
+              paddingBottom: 'env(safe-area-inset-bottom)',
+              maxHeight: '85dvh',
+              display: 'flex', flexDirection: 'column',
+            }}
+          >
+            {/* ヘッダー */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '14px 16px 10px',
+              borderBottom: '1px solid rgba(255,255,255,0.1)',
+              flexShrink: 0,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>ストックを整理する</span>
+                <span style={{ fontSize: 12, color: '#aaa' }}>{photoStock.length}枚</span>
+              </div>
+              <button
+                onClick={() => setShowStockOrganizer(false)}
+                style={{ background: 'none', border: 'none', color: '#aaa', fontSize: 20, cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}
+              >✕</button>
+            </div>
+
+            {/* 操作バー */}
+            <div style={{
+              display: 'flex', gap: 8, padding: '10px 14px',
+              borderBottom: '1px solid rgba(255,255,255,0.08)',
+              flexShrink: 0, alignItems: 'center', flexWrap: 'wrap',
+            }}>
+              <button
+                onClick={() => document.getElementById('photo-stock-add-organizer')?.click()}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '7px 12px', borderRadius: 8,
+                  border: '1.5px dashed rgba(242,107,154,0.7)',
+                  background: 'rgba(242,107,154,0.10)',
+                  color: '#f26b9a', fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0,
+                }}
+              >＋ 写真を追加</button>
+              <button
+                onClick={() => {
+                  if (stockDeleteSelected.size === photoStock.length) {
+                    setStockDeleteSelected(new Set());
+                  } else {
+                    setStockDeleteSelected(new Set(photoStock.map((_, i) => i)));
+                  }
+                }}
+                style={{
+                  padding: '7px 12px', borderRadius: 8,
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  background: 'transparent',
+                  color: '#ccc', fontSize: 12, cursor: 'pointer', flexShrink: 0,
+                }}
+              >
+                {stockDeleteSelected.size === photoStock.length && photoStock.length > 0 ? '全解除' : '全選択'}
+              </button>
+              {stockDeleteSelected.size > 0 && (
+                <button
+                  onClick={() => {
+                    setPhotoStock(prev => prev.filter((_, i) => !stockDeleteSelected.has(i)));
+                    setStockDeleteSelected(new Set());
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 5,
+                    marginLeft: 'auto', padding: '7px 12px', borderRadius: 8,
+                    border: 'none', background: 'rgba(220,60,60,0.85)',
+                    color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0,
+                  }}
+                >🗑️ {stockDeleteSelected.size}枚削除</button>
+              )}
+            </div>
+
+            {/* サムネイルグリッド（日付グループ表示） */}
+            <div style={{ overflowY: 'auto', padding: '10px 12px', flex: 1 }}>
+              {(() => {
+                // 日付でグループ化（撮影日あり→日付順、なし→末尾）
+                type Group = { label: string; indices: number[] };
+                const groups: Group[] = [];
+                const groupMap: Record<string, number[]> = {};
+                const noDateIndices: number[] = [];
+                photoStock.forEach((p, i) => {
+                  if (!p.takenAt) { noDateIndices.push(i); return; }
+                  const key = `${p.takenAt.getFullYear()}年${p.takenAt.getMonth()+1}月${p.takenAt.getDate()}日`;
+                  if (!groupMap[key]) groupMap[key] = [];
+                  groupMap[key].push(i);
+                });
+                // 日付昇順でソート
+                Object.entries(groupMap)
+                  .sort((a, b) => a[0] < b[0] ? -1 : 1)
+                  .forEach(([label, indices]) => groups.push({ label, indices }));
+                if (noDateIndices.length > 0) groups.push({ label: '日付不明', indices: noDateIndices });
+
+                if (groups.length === 0) {
+                  return (
+                    <div style={{ padding: '32px 0', textAlign: 'center', color: '#666', fontSize: 13 }}>
+                      ストックに写真がありません
+                    </div>
+                  );
+                }
+
+                return groups.map(group => (
+                  <div key={group.label} style={{ marginBottom: 14 }}>
+                    {/* グループヘッダー */}
+                    <div style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      marginBottom: 6,
+                    }}>
+                      <span style={{ fontSize: 11, color: '#aaa', fontWeight: 600 }}>{group.label}</span>
+                      <button
+                        onClick={() => {
+                          const allSelected = group.indices.every(i => stockDeleteSelected.has(i));
+                          setStockDeleteSelected(prev => {
+                            const next = new Set(prev);
+                            if (allSelected) { group.indices.forEach(i => next.delete(i)); }
+                            else { group.indices.forEach(i => next.add(i)); }
+                            return next;
+                          });
+                        }}
+                        style={{
+                          fontSize: 10, color: '#888', background: 'none',
+                          border: 'none', cursor: 'pointer', padding: '2px 6px',
+                        }}
+                      >
+                        {group.indices.every(i => stockDeleteSelected.has(i)) ? '解除' : 'この日を選択'}
+                      </button>
+                    </div>
+                    {/* グリッド */}
+                    <div style={{
+                      display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6,
+                    }}>
+                      {group.indices.map(idx => {
+                        const p = photoStock[idx];
+                        const checked = stockDeleteSelected.has(idx);
+                        return (
+                          <div
+                            key={idx}
+                            onClick={() => setStockDeleteSelected(prev => {
+                              const next = new Set(prev);
+                              if (next.has(idx)) next.delete(idx); else next.add(idx);
+                              return next;
+                            })}
+                            style={{
+                              position: 'relative', aspectRatio: '1/1',
+                              borderRadius: 8, overflow: 'hidden',
+                              border: checked ? '2.5px solid #f26b9a' : '2px solid rgba(255,255,255,0.07)',
+                              cursor: 'pointer', transition: 'border-color 0.12s',
+                            }}
+                          >
+                            <img src={p.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                            {/* チェックマーク */}
+                            <div style={{
+                              position: 'absolute', top: 5, right: 5,
+                              width: 20, height: 20, borderRadius: '50%',
+                              background: checked ? '#f26b9a' : 'rgba(0,0,0,0.45)',
+                              border: `2px solid ${checked ? '#fff' : 'rgba(255,255,255,0.5)'}`,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              transition: 'background 0.12s',
+                            }}>
+                              {checked && (
+                                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                                  <path d="M1.5 5 L4 7.5 L8.5 2.5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
+
+            {/* フッター */}
+            <div style={{
+              padding: '12px 16px', flexShrink: 0,
+              borderTop: '1px solid rgba(255,255,255,0.08)',
+            }}>
+              <button
+                onClick={() => { setStockDeleteSelected(new Set()); setShowStockOrganizer(false); }}
+                style={{
+                  width: '100%', padding: '12px', borderRadius: 10, border: 'none',
+                  background: '#3b4f7a', color: '#fff',
+                  fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                }}
+              >完了（{photoStock.length}枚）</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {cropImageUrl && (
         <CropModal imageUrl={cropImageUrl} initialShape={cropInitialShape} onComplete={handleCropComplete} onCancel={() => { setCropImageUrl(null); setTargetSlotId(null); setCropInitialShape(undefined); }} />
