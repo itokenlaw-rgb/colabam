@@ -30,7 +30,7 @@ function extractExifDate(file: File): Promise<Date | null> {
           const marker = view.getUint16(offset);
           offset += 2;
           if (marker === 0xFFE1) { // APP1 (Exif)
-            const segLen = view.getUint16(offset);
+            offset += 2; // segLenの代わり。getUint16で2バイト分進んでいるためt);
             const exifHeader = String.fromCharCode(
               view.getUint8(offset + 2), view.getUint8(offset + 3),
               view.getUint8(offset + 4), view.getUint8(offset + 5)
@@ -48,7 +48,7 @@ function extractExifDate(file: File): Promise<Date | null> {
               const tag = getU16(entryOffset);
               // 0x9003: DateTimeOriginal
               if (tag === 0x9003 || tag === 0x0132) {
-                const type = getU16(entryOffset + 2);
+                // type は取得しなくてOK
                 const count = getU32(entryOffset + 4);
                 const valueOffset = count > 4
                   ? tiffStart + getU32(entryOffset + 8)
