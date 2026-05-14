@@ -134,8 +134,8 @@ body { margin: 0; background: #eef6ff; font-family: sans-serif; } /* 全体の�
 /* ===== 回転ハンドル ===== */
 .rotate-handle {
   position: absolute;
-  top: -14px;      /* bottomからtopに変更 */
-  left: -14px;     /* rightからleftに変更 */
+  bottom: -14px;
+  right: -14px;
   width: 28px;
   height: 28px;
   background: #444;
@@ -145,7 +145,7 @@ body { margin: 0; background: #eef6ff; font-family: sans-serif; } /* 全体の�
   align-items: center;
   justify-content: center;
   cursor: grab;
-  z-index: 210;    /* 削除ボタン等より少し上にする */
+  z-index: 200;
   box-shadow: 0 2px 6px rgba(0,0,0,0.45);
   touch-action: none;
 }
