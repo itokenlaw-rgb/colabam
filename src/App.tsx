@@ -2222,152 +2222,122 @@ export default function App() {
             >
               <ImagePlus size={20} /><span>写真追加</span>
             </button>
-            {showPhotoAddMenu && (
-              <div
-                onClick={e => e.stopPropagation()}
-                style={{
-                  position: 'fixed',
-                  bottom: 70,
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  background: 'rgba(30,30,30,0.96)',
-                  borderRadius: 12,
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
-                  overflow: 'hidden',
-                  minWidth: 200,
-                  zIndex: 9999,
-                }}
-              >
-                <button
-                  onPointerDown={e => e.stopPropagation()}
-                  onClick={() => { setShowPhotoAddMenu(false); setTargetSlotId(null); document.getElementById('photo-upload')?.click(); }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
-                    width: '100%', padding: '12px 16px',
-                    background: 'transparent', border: 'none',
-                    borderBottom: '1px solid rgba(255,255,255,0.1)',
-                    color: '#fff', fontSize: 13, fontWeight: 600,
-                    cursor: 'pointer', textAlign: 'left',
-                  }}
-                >
-                  <span style={{ fontSize: 18, minWidth: 24 }}>📷</span>
-                  <div>
-                    <div>１枚追加</div>
-                    <div style={{ fontSize: 10, color: '#aaa', fontWeight: 400 }}>写真を1枚選んで追加</div>
-                  </div>
-                </button>
 
-                {/* ストック1〜3 それぞれへの追加ボタン */}
-                {([0, 1, 2] as const).map(idx => {
-                  const stockEmoji = ['🟠', '🟢', '🔵'][idx];
-                  const stockName = `ストック${idx + 1}`;
-                  const count = photoStocks[idx].length;
-                  return (
-                    <button
-                      key={idx}
-                      onPointerDown={e => e.stopPropagation()}
-                      onClick={() => { setActiveStockIndex(idx); document.getElementById('photo-stock-upload')?.click(); }}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 10,
-                        width: '100%', padding: '10px 16px',
-                        background: 'transparent', border: 'none',
-                        borderBottom: '1px solid rgba(255,255,255,0.1)',
-                        color: '#fff', fontSize: 13, fontWeight: 600,
-                        cursor: 'pointer', textAlign: 'left',
-                      }}
-                    >
-                      <span style={{ fontSize: 16, minWidth: 24 }}>🗂️</span>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontSize: 12 }}>{stockEmoji}</span>
-                          <span>{stockName}に写真を追加</span>
-                        </div>
-                        <div style={{ fontSize: 10, color: '#aaa', fontWeight: 400 }}>
-                          {count > 0 ? `現在${count}枚` : '空'}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
+{/* 写真追加サブメニュー */}
+{showPhotoAddMenu && (
+  <div
+    onClick={e => e.stopPropagation()}
+    style={{
+      position: 'fixed',
+      bottom: 70,
+      left: '50%',
+      transform: 'translateX(-50%)',
+      background: 'rgba(30,30,30,0.96)',
+      borderRadius: 12,
+      boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+      overflow: 'hidden',
+      minWidth: 200,
+      zIndex: 9999,
+    }}
+  >
+    {/* 1枚追加ボタン */}
+    <button
+      onPointerDown={e => e.stopPropagation()}
+      onClick={() => { setShowPhotoAddMenu(false); setTargetSlotId(null); document.getElementById('photo-upload')?.click(); }}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        width: '100%', padding: '12px 16px',
+        background: 'transparent', border: 'none',
+        borderBottom: '1px solid rgba(255,255,255,0.1)',
+        color: '#fff', fontSize: 13, fontWeight: 600,
+        cursor: 'pointer', textAlign: 'left',
+      }}
+    >
+      <span style={{ fontSize: 18, minWidth: 24 }}>📷</span>
+      <div>
+        <div>１枚追加</div>
+        <div style={{ fontSize: 10, color: '#aaa', fontWeight: 400 }}>写真を1枚選んで追加</div>
+      </div>
+    </button>
 
-                {/* ランダム配置ボタン */}
-                {(() => {
-                  const anyStockHasPhotos = photoStocks.some(s => s.length > 0);
-                  const canFill = anyStockHasPhotos && templateSlots.length > 0;
-                  return (
-                    <button
-                      onPointerDown={e => e.stopPropagation()}
-                      onClick={() => {
-                        if (!canFill) return;
-                        setShowFillStockPicker(true);
-                        setShowPhotoAddMenu(false);
-                      }}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 10,
-                        width: '100%', padding: '12px 16px',
-                        background: canFill ? 'rgba(100,200,120,0.15)' : 'transparent',
-                        border: 'none',
-                        borderBottom: anyStockHasPhotos ? '1px solid rgba(255,255,255,0.1)' : 'none',
-                        color: canFill ? '#6ec87a' : '#666',
-                        fontSize: 13, fontWeight: 600,
-                        cursor: canFill ? 'pointer' : 'default',
-                        textAlign: 'left',
-                      }}
-                    >
-                      <span style={{ fontSize: 18, minWidth: 24 }}>🎲</span>
-                      <div>
-                        <div>ストックから枠にランダムで入れる</div>
-                        <div style={{ fontSize: 10, fontWeight: 400, color: (!anyStockHasPhotos || templateSlots.length === 0) ? '#ff6b6b' : '#aaa' }}>
-                          {!anyStockHasPhotos
-                            ? 'ストックに写真がありません'
-                            : templateSlots.length === 0
-                              ? '空き枠がありません'
-                              : 'ストックを選んで配置'}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })()}
+    {/* ストック管理ボタン（整理・削除ボタンを統合・文言変更） */}
+    <button
+      onPointerDown={e => e.stopPropagation()}
+      onClick={() => { setShowPhotoAddMenu(false); setStockDeleteSelected(new Set()); setShowStockOrganizer(true); }}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        width: '100%', padding: '12px 16px',
+        background: 'transparent', border: 'none',
+        borderBottom: '1px solid rgba(255,255,255,0.1)',
+        color: '#fff', fontSize: 13, fontWeight: 600,
+        cursor: 'pointer', textAlign: 'left',
+      }}
+    >
+      <span style={{ fontSize: 18, minWidth: 24 }}>🗂️</span>
+      <div>
+        <div>ストックを管理する</div>
+        <div style={{ fontSize: 10, color: '#aaa', fontWeight: 400 }}>ストックの写真を追加・削除</div>
+      </div>
+    </button>
 
-                {/* 整理・削除ボタン */}
-                {photoStocks.some(s => s.length > 0) && (
-                  <>
-                    <button
-                      onPointerDown={e => e.stopPropagation()}
-                      onClick={() => { setShowPhotoAddMenu(false); setStockDeleteSelected(new Set()); setShowStockOrganizer(true); }}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 10,
-                        width: '100%', padding: '12px 16px',
-                        background: 'transparent', border: 'none',
-                        borderBottom: '1px solid rgba(255,255,255,0.1)',
-                        color: '#fff', fontSize: 13, fontWeight: 600,
-                        cursor: 'pointer', textAlign: 'left',
-                      }}
-                    >
-                      <span style={{ fontSize: 18, minWidth: 24 }}>✏️</span>
-                      <div>
-                        <div>ストックを整理する</div>
-                        <div style={{ fontSize: 10, color: '#aaa', fontWeight: 400 }}>ストックごとに写真を確認・削除</div>
-                      </div>
-                    </button>
-                    <button
-                      onPointerDown={e => e.stopPropagation()}
-                      onClick={() => { setPhotoStocks([[], [], []]); setShowPhotoAddMenu(false); }}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 10,
-                        width: '100%', padding: '10px 16px',
-                        background: 'transparent', border: 'none',
-                        color: '#ff7070', fontSize: 12, fontWeight: 500,
-                        cursor: 'pointer', textAlign: 'left',
-                      }}
-                    >
-                      <span style={{ fontSize: 16, minWidth: 24 }}>🗑️</span>
-                      <div>全ストックを消す（計{photoStocks.reduce((a, s) => a + s.length, 0)}枚）</div>
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
+    {/* ランダム配置ボタン */}
+    {(() => {
+      const anyStockHasPhotos = photoStocks.some(s => s.length > 0);
+      const canFill = anyStockHasPhotos && templateSlots.length > 0;
+      return (
+        <button
+          onPointerDown={e => e.stopPropagation()}
+          onClick={() => {
+            if (!canFill) return;
+            setShowFillStockPicker(true);
+            setShowPhotoAddMenu(false);
+          }}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            width: '100%', padding: '12px 16px',
+            background: canFill ? 'rgba(100,200,120,0.15)' : 'transparent',
+            border: 'none',
+            borderBottom: anyStockHasPhotos ? '1px solid rgba(255,255,255,0.1)' : 'none',
+            color: canFill ? '#6ec87a' : '#666',
+            fontSize: 13, fontWeight: 600,
+            cursor: canFill ? 'pointer' : 'default',
+            textAlign: 'left',
+          }}
+        >
+          <span style={{ fontSize: 18, minWidth: 24 }}>🎲</span>
+          <div>
+            <div>ストックから枠にランダムで入れる</div>
+            <div style={{ fontSize: 10, fontWeight: 400, color: (!anyStockHasPhotos || templateSlots.length === 0) ? '#ff6b6b' : '#aaa' }}>
+              {!anyStockHasPhotos
+                ? 'ストックに写真がありません'
+                : templateSlots.length === 0
+                  ? '空き枠がありません'
+                  : 'ストックを選んで配置'}
+            </div>
+          </div>
+        </button>
+      );
+    })()}
+
+    {/* 全ストック消去（既存のまま） */}
+    {photoStocks.some(s => s.length > 0) && (
+      <button
+        onPointerDown={e => e.stopPropagation()}
+        onClick={() => { if(window.confirm('すべてのストック写真を消去しますか？')) setPhotoStocks([[], [], []]); setShowPhotoAddMenu(false); }}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          width: '100%', padding: '10px 16px',
+          background: 'transparent', border: 'none',
+          color: '#ff7070', fontSize: 12, fontWeight: 500,
+          cursor: 'pointer', textAlign: 'left',
+        }}
+      >
+        <span style={{ fontSize: 16, minWidth: 24 }}>🗑️</span>
+        <div>全ストックを消す（計{photoStocks.reduce((a, s) => a + s.length, 0)}枚）</div>
+      </button>
+    )}
+  </div>
+)}
           </div>
           <button className={`tab-btn ${activeMainTab === 'stamp' ? 'active' : ''}`} onClick={() => handleTabToggle('stamp')}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
