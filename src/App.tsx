@@ -1425,7 +1425,7 @@ export default function App() {
   };
 
   // ストックから1枚を選んでクロップなしで枠に配置するヘルパー
-const handleSlotPickFromStock = (stockIdx: 0 | 1 | 2, stockPhotoUrl: string) => {
+const handleSlotPickFromStock = (_stockIdx: 0 | 1 | 2, stockPhotoUrl: string) => {
   maxZIndex.current += 1;
 
   if (slotPickerTargetId) {
