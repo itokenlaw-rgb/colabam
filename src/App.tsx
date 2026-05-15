@@ -30,7 +30,7 @@ function extractExifDate(file: File): Promise<Date | null> {
           const marker = view.getUint16(offset);
           offset += 2;
           if (marker === 0xFFE1) { // APP1 (Exif)
-            offset += 2; // segLenの代わり。getUint16で2バイト分進んでいるためt);
+            offset += 2; // segLenの代わり。getUint16で2バイト分進んでいるため);
             const exifHeader = String.fromCharCode(
               view.getUint8(offset + 2), view.getUint8(offset + 3),
               view.getUint8(offset + 4), view.getUint8(offset + 5)
@@ -717,7 +717,7 @@ const BG_SERIES: BgSeries[] = [
     id: 's1',
     label: '水彩',
     files: Array.from({ length: 12 }, (_, i) => `/colabam_bimg${101 + i}.jpg`),
-'/colabam_bimg997.jpg',
+      '/colabam_bimg997.jpg',
   },
   {
     id: 's2',
@@ -3227,7 +3227,7 @@ fontFamily={item.fontFamily ?? 'sans-serif'}
         <CropModal imageUrl={cropImageUrl} initialShape={cropInitialShape} onComplete={handleCropComplete} onCancel={() => { setCropImageUrl(null); setTargetSlotId(null); setCropInitialShape(undefined); }} />
       )}
 
-      {previewUrl && (
+{previewUrl && (
         <PreviewModal dataUrl={previewUrl} onClose={() => setPreviewUrl(null)} />
       )}
     </div>
