@@ -399,23 +399,21 @@ type RandomShape = 'square' | 'rect-v' | 'rect-h' | 'circle' | 'ellipse-v' | 'el
 
 function buildRandomSlots(): SlotData[] {
   const shapes: RandomShape[] = ['square', 'rect-v', 'rect-h', 'circle', 'ellipse-v', 'ellipse-h', 'heart', 'star'];
-  // 6つランダムに選ぶ（重複あり）
+  
+  // 6つランダムに選ぶ
   const picked: RandomShape[] = Array.from({ length: 6 }, () => shapes[Math.floor(Math.random() * shapes.length)]);
 
-  const PAD = 8;
-  const GAP = 6;
-  const TOP_OFFSET = 52;
+  const PAD = 10;
+  const GAP = 8;
+  const TOP_OFFSET = 55;
   const colW = (CANVAS_W - PAD * 2 - GAP) / 2;
   const availH = CANVAS_H - TOP_OFFSET - PAD - GAP * 2;
   const rowH = availH / 3;
 
   const grid = [
-    { col: 0, row: 0 },
-    { col: 1, row: 0 },
-    { col: 0, row: 1 },
-    { col: 1, row: 1 },
-    { col: 0, row: 2 },
-    { col: 1, row: 2 },
+    { col: 0, row: 0 }, { col: 1, row: 0 },
+    { col: 0, row: 1 }, { col: 1, row: 1 },
+    { col: 0, row: 2 }, { col: 1, row: 2 },
   ];
 
   return picked.map((shape, i) => {
@@ -423,38 +421,47 @@ function buildRandomSlots(): SlotData[] {
     const cx = PAD + col * (colW + GAP);
     const cy = TOP_OFFSET + row * (rowH + GAP);
 
-    let w = colW, h = rowH;
+    // --- 1. サイズのランダム化 (85%〜100%のランダム倍率) ---
+    const scale = 0.85 + Math.random() * 0.15;
+    let w = colW * scale;
+    let h = rowH * scale;
+
+    // 形状ごとのアスペクト比調整
     if (shape === 'square' || shape === 'circle' || shape === 'heart' || shape === 'star') {
-      const s = Math.min(colW, rowH);
+      const s = Math.min(w, h);
       w = s; h = s;
     } else if (shape === 'rect-v' || shape === 'ellipse-v') {
-      if (colW / rowH > 3 / 4) { h = rowH; w = rowH * 3 / 4; }
-      else { w = colW; h = colW * 4 / 3; }
+      w = h * (0.6 + Math.random() * 0.2); // 縦長度合いもランダムに
     } else if (shape === 'rect-h' || shape === 'ellipse-h') {
-      if (colW / rowH < 4 / 3) { w = colW; h = colW * 3 / 4; }
-      else { h = rowH; w = rowH * 4 / 3; }
+      h = w * (0.6 + Math.random() * 0.2); // 横長度合いもランダムに
     }
 
-    const x = cx + (colW - w) / 2;
-    const y = cy + (rowH - h) / 2;
+    // --- 2. 配置のゆらぎ (中心から±5px程度のズレ) ---
+    const offsetX = (Math.random() - 0.5) * 12;
+    const offsetY = (Math.random() - 0.5) * 12;
 
-let slotStyle: React.CSSProperties | undefined;
+    const x = cx + (colW - w) / 2 + offsetX;
+    const y = cy + (rowH - h) / 2 + offsetY;
+
+    // --- 3. 回転のランダム化 (-12度 〜 +12度) ---
+    const rotation = Math.floor(Math.random() * 24) - 12;
+
+    let slotStyle: React.CSSProperties | undefined;
     if (shape === 'circle' || shape === 'ellipse-v' || shape === 'ellipse-h') {
       slotStyle = { borderRadius: '50%' };
     } else if (shape === 'heart') {
-      // 修正後：カスタム配置と同じ高精度なハートの形
       slotStyle = { clipPath: 'polygon(50% 25%, 60% 10%, 75% 5%, 90% 10%, 100% 25%, 100% 42%, 85% 60%, 65% 78%, 50% 100%, 35% 78%, 15% 60%, 0% 42%, 0% 25%, 10% 10%, 25% 5%, 40% 10%)' };
     } else if (shape === 'star') {
-      // 修正後：カスタム配置と同じ高精度な星の形
       slotStyle = { clipPath: 'polygon(50% 0%, 61.8% 35.4%, 98.1% 34.5%, 69.1% 57.3%, 79.4% 90.5%, 50% 70%, 20.6% 90.5%, 30.9% 57.3%, 1.9% 34.5%, 38.2% 35.4%)' };
     }
 
     return {
-      id: `rs${i + 1}`,
+      id: `rs${i + 1}-${Math.random()}`, // IDをユニークにする
       x: Math.round(x),
       y: Math.round(y),
       width: Math.round(w),
       height: Math.round(h),
+      rotation: rotation, // 回転を適用
       style: slotStyle,
     };
   });
@@ -2375,7 +2382,7 @@ fontFamily={item.fontFamily ?? 'sans-serif'}
         <div>ストックを管理する</div>
         <div style={{ fontSize: 10, color: '#aaa', fontWeight: 400 }}>ストックの写真を追加・削除</div>
         <div style={{ fontSize: 9, color: '#f26b9a', fontWeight: 400, marginTop: 2 }}>
-          {`ストック１：${photoStocks[0].length}枚、ストック２：${photoStocks[1].length}枚、ストック３：${photoStocks[2].length}枚`}
+          {`〔ストック１〕：${photoStocks[0].length}枚、〔ストック２〕：${photoStocks[1].length}枚、〔ストック３〕：${photoStocks[2].length}枚`}
         </div>
       </div>
     </button>
