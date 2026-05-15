@@ -399,53 +399,79 @@ type RandomShape = 'square' | 'rect-v' | 'rect-h' | 'circle' | 'ellipse-v' | 'el
 
 function buildRandomSlots(): SlotData[] {
   const shapes: RandomShape[] = ['square', 'rect-v', 'rect-h', 'circle', 'ellipse-v', 'ellipse-h', 'heart', 'star'];
-  
-  // 6つランダムに選ぶ
-  const picked: RandomShape[] = Array.from({ length: 6 }, () => shapes[Math.floor(Math.random() * shapes.length)]);
+  const rnd = () => Math.random();
 
+  // キャンバスの有効エリア
+  const TOP_OFFSET = 52;
   const PAD = 10;
-  const GAP = 8;
-  const TOP_OFFSET = 55;
-  const colW = (CANVAS_W - PAD * 2 - GAP) / 2;
-  const availH = CANVAS_H - TOP_OFFSET - PAD - GAP * 2;
-  const rowH = availH / 3;
+  const areaW = CANVAS_W - PAD * 2;
+  const areaH = CANVAS_H - TOP_OFFSET - PAD;
 
-  const grid = [
-    { col: 0, row: 0 }, { col: 1, row: 0 },
-    { col: 0, row: 1 }, { col: 1, row: 1 },
-    { col: 0, row: 2 }, { col: 1, row: 2 },
-  ];
+  // サイズのバリエーション：小(S)・中(M)・大(L) をランダムに割り当て
+  // S: 短辺60〜90, M: 短辺90〜130, L: 短辺130〜170
+  function randomSize(shape: RandomShape): { w: number; h: number } {
+    const tier = rnd();
+    let base: number;
+    if (tier < 0.33) base = 60 + rnd() * 30;       // S
+    else if (tier < 0.67) base = 90 + rnd() * 40;   // M
+    else base = 130 + rnd() * 40;                    // L
 
-  return picked.map((shape, i) => {
-    const { col, row } = grid[i];
-    const cx = PAD + col * (colW + GAP);
-    const cy = TOP_OFFSET + row * (rowH + GAP);
-
-    // --- 1. サイズのランダム化 (85%〜100%のランダム倍率) ---
-    const scale = 0.85 + Math.random() * 0.15;
-    let w = colW * scale;
-    let h = rowH * scale;
-
-    // 形状ごとのアスペクト比調整
     if (shape === 'square' || shape === 'circle' || shape === 'heart' || shape === 'star') {
-      const s = Math.min(w, h);
-      w = s; h = s;
+      return { w: base, h: base };
     } else if (shape === 'rect-v' || shape === 'ellipse-v') {
-      w = h * (0.6 + Math.random() * 0.2); // 縦長度合いもランダムに
-    } else if (shape === 'rect-h' || shape === 'ellipse-h') {
-      h = w * (0.6 + Math.random() * 0.2); // 横長度合いもランダムに
+      const ratio = 1.3 + rnd() * 0.7; // 縦長比1.3〜2.0
+      return { w: base, h: base * ratio };
+    } else { // rect-h / ellipse-h
+      const ratio = 1.3 + rnd() * 0.7; // 横長比1.3〜2.0
+      return { w: base * ratio, h: base };
+    }
+  }
+
+  // 重なり評価：中心間距離が両枠の対角の平均の60%より小さければ重なりすぎ
+  function overlaps(
+    slots: Array<{ cx: number; cy: number; w: number; h: number }>,
+    cx: number, cy: number, w: number, h: number
+  ): boolean {
+    for (const s of slots) {
+      const minDist = (Math.hypot(s.w, s.h) + Math.hypot(w, h)) * 0.28;
+      if (Math.hypot(cx - s.cx, cy - s.cy) < minDist) return true;
+    }
+    return false;
+  }
+
+  const placed: Array<{ cx: number; cy: number; w: number; h: number; shape: RandomShape; rotation: number }> = [];
+  const MAX_TRIES = 200;
+
+  for (let i = 0; i < 6; i++) {
+    const shape = shapes[Math.floor(rnd() * shapes.length)];
+    const { w, h } = randomSize(shape);
+
+    // 回転：±30度（心臓・星は±20度に抑える）
+    const maxRot = (shape === 'heart' || shape === 'star') ? 20 : 30;
+    const rotation = Math.round((rnd() - 0.5) * 2 * maxRot);
+
+    let cx = 0, cy = 0;
+    let ok = false;
+
+    for (let t = 0; t < MAX_TRIES; t++) {
+      // 中心がキャンバス内に収まるよう配置（はみ出しは±20pxまで許容）
+      const margin = 20;
+      cx = PAD + w / 2 - margin + rnd() * (areaW - w + margin * 2);
+      cy = TOP_OFFSET + h / 2 - margin + rnd() * (areaH - h + margin * 2);
+
+      if (!overlaps(placed, cx, cy, w, h)) { ok = true; break; }
     }
 
-    // --- 2. 配置のゆらぎ (中心から±5px程度のズレ) ---
-    const offsetX = (Math.random() - 0.5) * 12;
-    const offsetY = (Math.random() - 0.5) * 12;
+    if (!ok) {
+      // どうしても置けない場合は重なりを諦めて配置
+      cx = PAD + w / 2 + rnd() * (areaW - w);
+      cy = TOP_OFFSET + h / 2 + rnd() * (areaH - h);
+    }
 
-    const x = cx + (colW - w) / 2 + offsetX;
-    const y = cy + (rowH - h) / 2 + offsetY;
+    placed.push({ cx, cy, w, h, shape, rotation });
+  }
 
-    // --- 3. 回転のランダム化 (-12度 〜 +12度) ---
-    const rotation = Math.floor(Math.random() * 24) - 12;
-
+  return placed.map(({ cx, cy, w, h, shape, rotation }, i) => {
     let slotStyle: React.CSSProperties | undefined;
     if (shape === 'circle' || shape === 'ellipse-v' || shape === 'ellipse-h') {
       slotStyle = { borderRadius: '50%' };
@@ -456,12 +482,12 @@ function buildRandomSlots(): SlotData[] {
     }
 
     return {
-      id: `rs${i + 1}-${Math.random()}`, // IDをユニークにする
-      x: Math.round(x),
-      y: Math.round(y),
+      id: `rs${i + 1}-${Date.now()}-${i}`,
+      x: Math.round(cx - w / 2),
+      y: Math.round(cy - h / 2),
       width: Math.round(w),
       height: Math.round(h),
-      rotation: rotation, // 回転を適用
+      rotation,
       style: slotStyle,
     };
   });
