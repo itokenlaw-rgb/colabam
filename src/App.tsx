@@ -1338,7 +1338,7 @@ export default function App() {
     }
 
     if (targetSlotId === '__retrim__' && retrimTargetId) {
-      // スキミングやり直し（元画像URLはそのまま維持）
+      // トリミングやり直し（元画像URLはそのまま維持）
       pushHistory(items);
       setItems(prev => prev.map(i =>
         i.id === retrimTargetId
@@ -1554,7 +1554,7 @@ const handleSlotPickFromStock = (stockIdx: 0 | 1 | 2, stockPhotoUrl: string) => 
     else if (ratio < 0.85) shape = 'rectangle';
     else shape = 'square';
     setCropInitialShape(shape);
-    // 元画像があればそちらを使う（より広い範囲でスキミングし直せる）
+    // 元画像があればそちらを使う（より広い範囲でトリミングし直せる）
     setCropImageUrl(item.originalImageUrl ?? item.content);
     setTargetSlotId('__retrim__');
   };
@@ -2169,7 +2169,7 @@ fontFamily={item.fontFamily ?? 'sans-serif'}
             {[
               { label: '前面へ',      icon: '⬆', onClick: () => { handleBringToFront(subItem.id); setPhotoSubMenuId(null); setPhotoSubMenuPos(null); } },
               { label: '背面へ',      icon: '⬇', onClick: () => { handleSendToBack(subItem.id);   setPhotoSubMenuId(null); setPhotoSubMenuPos(null); } },
-              { label: 'スキミングする', icon: '✂️', onClick: () => { handleRetrimPhoto(subItem.id);  setPhotoSubMenuId(null); setPhotoSubMenuPos(null); } },
+              { label: 'トリミングする', icon: '✂️', onClick: () => { handleRetrimPhoto(subItem.id);  setPhotoSubMenuId(null); setPhotoSubMenuPos(null); } },
               { label: '写真を変更する', icon: '🔄', onClick: () => { handleReplacePhoto(subItem.id); setPhotoSubMenuId(null); setPhotoSubMenuPos(null); } },
             ].map((action, idx, arr) => (
               <button
