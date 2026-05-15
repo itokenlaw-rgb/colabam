@@ -808,7 +808,7 @@ function StampMenu({ onAdd }: { onAdd: (url: string) => void }) {
             key={cat.id}
             onClick={() => setActiveCategory(cat.id)}
             style={{
-              flex: 1, padding: '3px 0', borderRadius: 6,
+              flex: 1, padding: '8px 4px', borderRadius: 6,
               border: `2px solid ${activeCategory === cat.id ? 'var(--primary)' : '#ddd'}`,
               background: activeCategory === cat.id ? '#fff0f5' : 'white',
               cursor: 'pointer', fontSize: 11,
@@ -869,7 +869,7 @@ function ImageBgTab({ canvasBg, setCanvasBg }: {
         <button
           onClick={() => setCanvasBg(prev => ({ ...prev, bgImage: undefined }))}
           style={{
-            padding: '2px 8px', borderRadius: 6, border: `2px solid ${!canvasBg.bgImage ? 'var(--primary)' : '#ddd'}`,
+            padding: '8px 8px', borderRadius: 6, border: `2px solid ${!canvasBg.bgImage ? 'var(--primary)' : '#ddd'}`,
             background: !canvasBg.bgImage ? '#fff0f5' : 'white',
             cursor: 'pointer', fontSize: 10, color: !canvasBg.bgImage ? 'var(--primary)' : '#888',
             fontWeight: !canvasBg.bgImage ? 'bold' : 'normal', whiteSpace: 'nowrap', flexShrink: 0,
@@ -881,7 +881,7 @@ function ImageBgTab({ canvasBg, setCanvasBg }: {
             key={s.id}
             onClick={() => setActiveSeries(s.id)}
             style={{
-              flex: 1, padding: '2px 4px', borderRadius: 6,
+              flex: 1, padding: '8px 4px', borderRadius: 6,
               border: `2px solid ${activeSeries === s.id ? 'var(--primary)' : '#ddd'}`,
               background: activeSeries === s.id ? '#fff0f5' : 'white',
               cursor: 'pointer', fontSize: 10,
@@ -952,21 +952,21 @@ function BgMenu({ canvasBg, setCanvasBg }: {
         <button
           onClick={() => setBgTab('image')}
           style={{
-            flex: 1, padding: '3px 0', borderRadius: 6, border: `2px solid ${bgTab === 'image' ? 'var(--primary)' : '#ddd'}`,
+            flex: 1, padding: '8px 0', borderRadius: 6, border: `2px solid ${bgTab === 'image' ? 'var(--primary)' : '#ddd'}`,
             background: bgTab === 'image' ? '#fff0f5' : 'white', cursor: 'pointer', fontSize: 11, fontWeight: bgTab === 'image' ? 'bold' : 'normal', color: bgTab === 'image' ? 'var(--primary)' : '#555',
           }}
         >🖼️ イラスト</button>
         <button
           onClick={() => setBgTab('color')}
           style={{
-            flex: 1, padding: '3px 0', borderRadius: 6, border: `2px solid ${bgTab === 'color' ? 'var(--primary)' : '#ddd'}`,
+            flex: 1, padding: '8px 0', borderRadius: 6, border: `2px solid ${bgTab === 'color' ? 'var(--primary)' : '#ddd'}`,
             background: bgTab === 'color' ? '#fff0f5' : 'white', cursor: 'pointer', fontSize: 11, fontWeight: bgTab === 'color' ? 'bold' : 'normal', color: bgTab === 'color' ? 'var(--primary)' : '#555',
           }}
         >🎨 カラー</button>
         <button
           onClick={() => setBgTab('photo')}
           style={{
-            flex: 1, padding: '3px 0', borderRadius: 6, border: `2px solid ${bgTab === 'photo' ? 'var(--primary)' : '#ddd'}`,
+            flex: 1, padding: '8px 0', borderRadius: 6, border: `2px solid ${bgTab === 'photo' ? 'var(--primary)' : '#ddd'}`,
             background: bgTab === 'photo' ? '#fff0f5' : 'white', cursor: 'pointer', fontSize: 11, fontWeight: bgTab === 'photo' ? 'bold' : 'normal', color: bgTab === 'photo' ? 'var(--primary)' : '#555',
           }}
         >📷 写真</button>
@@ -1943,21 +1943,60 @@ const handleSlotPickFromStock = (_stockIdx: 0 | 1 | 2, stockPhotoUrl: string) =>
             </div>
           </div>
         );
-      case 'text':
+      case 'text': {
+        // 選択中のテキストアイテムがあるかどうか
+        const editingTextItem = selectedId
+          ? items.find(i => i.id === selectedId && i.type === 'text') ?? null
+          : null;
+
+        // コントロールが変化したとき：選択中アイテムがあればそれを更新、なければstateを更新
+        const handleTextColor = (c: string) => {
+          setTextColor(c);
+          if (editingTextItem) {
+            setItems(prev => prev.map(i => i.id === editingTextItem.id ? { ...i, color: c } : i));
+          }
+        };
+        const handleFontSize = (s: number) => {
+          setFontSize(s);
+          if (editingTextItem) {
+            setItems(prev => prev.map(i => i.id === editingTextItem.id ? { ...i, fontSize: s } : i));
+          }
+        };
+        const handleFontFamily = (f: string) => {
+          setFontFamily(f);
+          if (editingTextItem) {
+            setItems(prev => prev.map(i => i.id === editingTextItem.id ? { ...i, fontFamily: f } : i));
+          }
+        };
+        const handleTextStyle = (ts: TextStyleId) => {
+          setTextStyle(ts);
+          if (editingTextItem) {
+            setItems(prev => prev.map(i => i.id === editingTextItem.id ? { ...i, textStyle: ts } : i));
+          }
+        };
+
         return (
           <div className="text-menu-controls">
-            <input type="text" value={inputText} onChange={(e) => setInputText(e.target.value)} placeholder="文字を入力..." className="text-input" />
+            {editingTextItem ? (
+              <div style={{
+                fontSize: 11, color: 'var(--primary)', fontWeight: 'bold',
+                padding: '2px 4px 4px', textAlign: 'center',
+              }}>
+                ✏️ 選択中のテキストを編集中
+              </div>
+            ) : (
+              <input type="text" value={inputText} onChange={(e) => setInputText(e.target.value)} placeholder="文字を入力..." className="text-input" />
+            )}
             <div className="control-row">
-              <input type="color" value={textColor} onChange={(e) => setTextColor(e.target.value)} />
-              <input type="range" min="12" max="100" value={fontSize} onChange={(e) => setFontSize(parseInt(e.target.value))} />
+              <input type="color" value={textColor} onChange={(e) => handleTextColor(e.target.value)} />
+              <input type="range" min="12" max="100" value={fontSize} onChange={(e) => handleFontSize(parseInt(e.target.value))} />
               <span style={{ fontSize: 12, minWidth: 30 }}>{fontSize}px</span>
 
-{/* ★ここへ移動：幅を調整したフォント選択プルダウン */}
               <select
                 value={fontFamily}
-                onChange={(e) => setFontFamily(e.target.value)}
+                onChange={(e) => handleFontFamily(e.target.value)}
                 style={{
-                  flex: 1, // 空いているスペースを埋める
+                  flex: 1,
                   minWidth: 80,
                   padding: '5px 4px',
                   borderRadius: '6px',
@@ -1975,7 +2014,9 @@ const handleSlotPickFromStock = (_stockIdx: 0 | 1 | 2, stockPhotoUrl: string) =>
                 ))}
               </select>
 
-              <button onClick={() => { if (inputText.trim()) { addItem('text', inputText, { color: textColor, fontSize, textStyle,fontFamily }); setInputText(''); } }} className="add-btn">追加</button>
+              {!editingTextItem && (
+                <button onClick={() => { if (inputText.trim()) { addItem('text', inputText, { color: textColor, fontSize, textStyle, fontFamily }); setInputText(''); } }} className="add-btn">追加</button>
+              )}
             </div>
 
             <div className="text-style-row">
@@ -1983,7 +2024,7 @@ const handleSlotPickFromStock = (_stockIdx: 0 | 1 | 2, stockPhotoUrl: string) =>
                 <button
                   key={ts.id}
                   className={`text-style-btn ${textStyle === ts.id ? 'active' : ''}`}
-                  onClick={() => setTextStyle(ts.id)}
+                  onClick={() => handleTextStyle(ts.id)}
                 >
                   <span
                     className="text-style-preview"
@@ -2005,6 +2046,7 @@ const handleSlotPickFromStock = (_stockIdx: 0 | 1 | 2, stockPhotoUrl: string) =>
             </div>
           </div>
         );
+      }
       case 'stamp':
         return (
           <StampMenu
@@ -2161,7 +2203,18 @@ const handleSlotPickFromStock = (_stockIdx: 0 | 1 | 2, stockPhotoUrl: string) =>
                         setPhotoSubMenuId(item.id);
                         setPhotoSubMenuPos(getMenuPos());
                       }
-                    } else if (item.type === 'stamp' || item.type === 'text') {
+                    } else if (item.type === 'text') {
+                      // テキストアイテムをタップ → テキストメニューを開き、選択中アイテムの値をコントロールに反映
+                      setPhotoSubMenuId(null);
+                      setPhotoSubMenuPos(null);
+                      setItemSubMenuId(null);
+                      setItemSubMenuPos(null);
+                      setActiveMainTab('text');
+                      setTextColor(item.color ?? '#333333');
+                      setFontSize(item.fontSize ?? 36);
+                      setTextStyle(item.textStyle ?? 'normal');
+                      setFontFamily(item.fontFamily ?? 'sans-serif');
+                    } else if (item.type === 'stamp') {
                       if (itemSubMenuId === item.id) {
                         setItemSubMenuId(null);
                         setItemSubMenuPos(null);
