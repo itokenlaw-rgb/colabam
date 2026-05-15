@@ -2290,7 +2290,7 @@ fontFamily={item.fontFamily ?? 'sans-serif'}
           <div className="sub-menu" style={
             activeMainTab === 'template' && customPicking ? { height: 180 }
             : activeMainTab === 'text' ? { height: 160 }
-            : activeMainTab === 'background' ? { height: 185 }
+: activeMainTab === 'background' ? { height: 'auto' }
             : undefined
           }>
             {renderSubMenu()}
