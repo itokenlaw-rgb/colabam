@@ -20,7 +20,7 @@ body { margin: 0; background: #eef6ff; font-family: sans-serif; } /* 全体の�
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 12px;
+padding: 10px 12px 5px 12px;
   background: transparent;
   position: relative;
   z-index: 100;
@@ -61,7 +61,8 @@ body { margin: 0; background: #eef6ff; font-family: sans-serif; } /* 全体の�
   flex: 1;
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start; /* 中央揃えから上揃えに変更 */
+  padding-top: 10px;      /* ヘッダーとの間のわずかな余白 */
   overflow: hidden;
   min-height: 0;
 }
@@ -174,23 +175,44 @@ body { margin: 0; background: #eef6ff; font-family: sans-serif; } /* 全体の�
   bottom: 100%;
   left: 0;
   right: 0;
-  box-shadow: 0 -2px 8px rgba(0,0,0,0.10);
+box-shadow: 0 -4px 12px rgba(0,0,0,0.15);
+  border-radius: 16px 16px 0 0;
 }
 
 .main-tabs {
   display: flex;
-  height: 60px;
-  border-top: 1px solid #eee;
+  height: 80px; /* 60pxから80pxに拡大 */
+  border-top: 1px solid #ddd;
+  background: #fff;
+  padding: 4px 6px;
+  gap: 4px;
 }
 
 .tab-btn {
-  flex: 1; border: none; background: none;
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  gap: 2px; font-size: 10px; color: #888; cursor: pointer; padding: 0;
+  flex: 1;
+  border: 1px solid #eee; /* ボタンの境界を少し明確に */
+  border-radius: 10px;
+  background: #fcfcfc;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px; /* アイコンと文字の間隔 */
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
-.tab-btn span { font-size: 10px; }
-.tab-btn.active { color: var(--primary); }
+
+.tab-btn span {
+  font-size: 11px; /* 少し大きく */
+  font-weight: bold;
+}
+
+.tab-btn.active {
+  color: var(--primary);
+  background: #fff5f8;
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
 .tab-btn:hover { color: var(--primary); }
 
 /* ===== Template Sub Menu ===== */

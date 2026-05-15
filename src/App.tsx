@@ -2284,34 +2284,36 @@ fontFamily={item.fontFamily ?? 'sans-serif'}
         );
       })()}
 
-      <nav className="bottom-menu">
+
+<nav className="bottom-menu">
         {activeMainTab !== null && (
-<div className="sub-menu" style={
-  activeMainTab === 'template' && customPicking ? { height: 180 }
-  : activeMainTab === 'text' ? { height: 160 }
-  : activeMainTab === 'background' ? { height: 185 } // 185に減らす
-  : undefined
-}>
+          <div className="sub-menu" style={
+            activeMainTab === 'template' && customPicking ? { height: 180 }
+            : activeMainTab === 'text' ? { height: 160 }
+            : activeMainTab === 'background' ? { height: 185 }
+            : undefined
+          }>
             {renderSubMenu()}
           </div>
         )}
         <div className="main-tabs">
+
 {/* 1. 背景変更を一番左に移動 */}
-  <button className={`tab-btn ${activeMainTab === 'background' ? 'active' : ''}`} onClick={() => handleTabToggle('background')}>
-    <Grid size={20} /><span>背景変更</span>
-  </button>
+<button className={`tab-btn ${activeMainTab === 'background' ? 'active' : ''}`} onClick={() => handleTabToggle('background')}>
+            <Grid size={22} /><span>背景変更</span>
+          </button>
 
   {/* 2. 写真枠配置を左から二番目に移動 */}
-  <button className={`tab-btn ${activeMainTab === 'template' ? 'active' : ''}`} onClick={() => handleTabToggle('template')}>
-    <LayoutTemplate size={20} /><span>写真枠配置</span>
-  </button>
-          <div style={{ position: 'relative', display: 'contents' }} ref={photoAddMenuRef}>
+<button className={`tab-btn ${activeMainTab === 'template' ? 'active' : ''}`} onClick={() => handleTabToggle('template')}>
+            <LayoutTemplate size={22} /><span>写真枠配置</span>
+          </button>
+
+<div style={{ position: 'relative', display: 'contents' }}>
             <button
               className={`tab-btn ${showPhotoAddMenu ? 'active' : ''}`}
               onClick={(e) => { e.stopPropagation(); setShowPhotoAddMenu(prev => !prev); setActiveMainTab(null); }}
-              style={{ position: 'relative' }}
             >
-              <ImagePlus size={20} /><span>写真追加</span>
+              <ImagePlus size={22} /><span>写真追加</span>
             </button>
 
 {/* 修正後の「写真追加」サブメニュー部分 */}
@@ -2443,8 +2445,9 @@ fontFamily={item.fontFamily ?? 'sans-serif'}
   </div>
 )}
           </div>
-          <button className={`tab-btn ${activeMainTab === 'stamp' ? 'active' : ''}`} onClick={() => handleTabToggle('stamp')}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+
+<button className={`tab-btn ${activeMainTab === 'stamp' ? 'active' : ''}`} onClick={() => handleTabToggle('stamp')}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 2a5 5 0 0 1 5 5c0 2-1 3.5-2.5 4.5V13h-5v-1.5C8 10.5 7 9 7 7a5 5 0 0 1 5-5z"/>
               <rect x="7" y="13" width="10" height="3" rx="1"/>
               <rect x="5" y="16" width="14" height="3" rx="1"/>
@@ -2452,8 +2455,8 @@ fontFamily={item.fontFamily ?? 'sans-serif'}
             <span>スタンプ</span>
           </button>
           <button className={`tab-btn ${activeMainTab === 'text' ? 'active' : ''}`} onClick={() => handleTabToggle('text')}>
-            <svg width="20" height="20" viewBox="0 0 24 24">
-              <text x="1" y="17" fontSize="14" fontWeight="bold" fontFamily="serif" fill="currentColor">Aa</text>
+            <svg width="22" height="22" viewBox="0 0 24 24">
+              <text x="1" y="18" fontSize="16" fontWeight="bold" fontFamily="serif" fill="currentColor">Aa</text>
             </svg>
             <span>テキスト</span>
           </button>
