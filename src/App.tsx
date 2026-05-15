@@ -1221,6 +1221,9 @@ export default function App() {
   const [dateFilterTo, setDateFilterTo] = useState('');
   // ストック選択ポップアップ（ランダム配置用）
   const [showFillStockPicker, setShowFillStockPicker] = useState(false);
+  // ランダム配置モード確認ダイアログ
+  const [showFillModeDialog, setShowFillModeDialog] = useState(false);
+  const [pendingFillStockIdx, setPendingFillStockIdx] = useState<0 | 1 | 2 | null>(null);
 
   // 枠クリック時の写真選択元メニュー
   const [showSlotPickerMenu, setShowSlotPickerMenu] = useState(false);
@@ -1458,7 +1461,6 @@ const saveAlbum = async () => {
 
   } catch (err) {
     console.error("保存に失敗しました", err);
-    alert("画像の生成に失敗しました。");
   }
 };
 
@@ -1671,19 +1673,81 @@ const handleSlotPickFromStock = (_stockIdx: 0 | 1 | 2, stockPhotoUrl: string) =>
   };
 
   // 枠を全部埋める（ストックからランダム）
-  const handleFillAllSlots = (stockIdx: 0 | 1 | 2) => {
+  // ストック選択後、空き枠の有無でモード確認ダイアログを出す
+  const handleFillStockSelected = (stockIdx: 0 | 1 | 2) => {
     const photoStock = photoStocks[stockIdx];
     if (photoStock.length === 0) {
       alert(`ストック${stockIdx + 1}に写真がありません。先に写真を追加してください。`);
       return;
     }
+    // 空き枠があるかチェック（枠のIDに対応する写真アイテムが既にあるか）
+    const filledSlotIds = new Set(
+      items
+        .filter(item => item.type === 'photo')
+        .map(item => {
+          // id形式: photo-slot-{slotId}-{timestamp}-{i}
+          const m = item.id.match(/^photo-slot-(.+?)-\d+/);
+          return m ? m[1] : null;
+        })
+        .filter(Boolean)
+    );
+    const hasEmptySlot = templateSlots.some(slot => !filledSlotIds.has(slot.id));
+
+    setPendingFillStockIdx(stockIdx);
+    setShowFillStockPicker(false);
+    if (hasEmptySlot) {
+      // 空き枠あり → 選択ダイアログを出す
+      setShowFillModeDialog(true);
+    } else {
+      // すべて埋まっている → 直接「入れ替え」確認なしで実行
+      setShowFillModeDialog(true);
+    }
+  };
+
+  // 実際に配置を行う（emptyOnly=trueで空き枠のみ、falseで全枠置換）
+  const handleFillAllSlots = (stockIdx: 0 | 1 | 2, emptyOnly: boolean) => {
+    const photoStock = photoStocks[stockIdx];
+    if (photoStock.length === 0) return;
+
+    const shuffled = [...photoStock].sort(() => Math.random() - 0.5);
+
+    // 写真枠（templateSlots）がない場合 → キャンバス上の既存 photo items を差し替え
     if (templateSlots.length === 0) {
-      alert('写真枠がありません。先に「写真枠配置」から枠を配置してください。');
+      const photoItems = items.filter(item => item.type === 'photo');
+      if (photoItems.length === 0) return;
+      pushHistory(items);
+      setItems(prev =>
+        prev.map(item => {
+          if (item.type !== 'photo') return item;
+          const idx = photoItems.indexOf(item);
+          const imgUrl = shuffled[idx % shuffled.length].url;
+          return { ...item, content: imgUrl, originalImageUrl: imgUrl };
+        })
+      );
+      setShowPhotoAddMenu(false);
+      setShowFillModeDialog(false);
+      setPendingFillStockIdx(null);
       return;
     }
+
+    // 空き枠の判定
+    const filledSlotIds = new Set(
+      items
+        .filter(item => item.type === 'photo')
+        .map(item => {
+          const m = item.id.match(/^photo-slot-(.+?)-\d+/);
+          return m ? m[1] : null;
+        })
+        .filter(Boolean)
+    );
+    const targetSlots = emptyOnly
+      ? templateSlots.filter(slot => !filledSlotIds.has(slot.id))
+      : templateSlots;
+
+    if (targetSlots.length === 0) return;
+
     pushHistory(items);
-    const shuffled = [...photoStock].sort(() => Math.random() - 0.5);
-    const newItems: CanvasItem[] = templateSlots.map((slot, i) => {
+    const newItems: CanvasItem[] = targetSlots.map((slot, i) => {
       const imgUrl = shuffled[i % shuffled.length].url;
       maxZIndex.current += 1;
       const clipShape = slotStyleToClipShape(slot);
@@ -1705,9 +1769,11 @@ const handleSlotPickFromStock = (_stockIdx: 0 | 1 | 2, stockPhotoUrl: string) =>
       };
     });
     setItems(prev => [...prev, ...newItems]);
-    setTemplateSlots([]);
+    // 全枠置換の場合のみテンプレートスロットをクリア
+    if (!emptyOnly) setTemplateSlots([]);
     setShowPhotoAddMenu(false);
-    setShowFillStockPicker(false);
+    setShowFillModeDialog(false);
+    setPendingFillStockIdx(null);
   };
 
   const selectedIdRef = useRef<string | null>(null);
@@ -2433,34 +2499,37 @@ fontFamily={item.fontFamily ?? 'sans-serif'}
     {/* ランダム配置ボタン */}
     {(() => {
       const anyStockHasPhotos = photoStocks.some(s => s.length > 0);
-      const canFill = anyStockHasPhotos && templateSlots.length > 0;
+      const hasSlots = templateSlots.length > 0;
+      const canFill = anyStockHasPhotos && hasSlots;
+      // ストックに写真があれば（枠が空でなくても）ボタンは押せる
+      const canOpen = anyStockHasPhotos;
       return (
         <button
           onPointerDown={e => e.stopPropagation()}
           onClick={() => {
-            if (!canFill) return;
+            if (!canOpen) return;
             setShowFillStockPicker(true);
             setShowPhotoAddMenu(false);
           }}
           style={{
             display: 'flex', alignItems: 'center', gap: 12,
             width: '100%', padding: '12px 16px',
-            background: canFill ? '#fff5f8' : 'transparent',
+            background: canOpen ? '#fff5f8' : 'transparent',
             border: 'none',
-            color: canFill ? 'var(--primary)' : '#ccc',
+            color: canOpen ? 'var(--primary)' : '#ccc',
             fontSize: 13, fontWeight: 600,
-            cursor: canFill ? 'pointer' : 'default',
+            cursor: canOpen ? 'pointer' : 'default',
             textAlign: 'left',
           }}
         >
           <span style={{ fontSize: 18, minWidth: 24 }}>🎲</span>
           <div>
             <div>ストックから枠にランダムで入れる</div>
-            <div style={{ fontSize: 10, fontWeight: 400, color: (!anyStockHasPhotos || templateSlots.length === 0) ? '#ff6b6b' : '#aaa' }}>
+            <div style={{ fontSize: 10, fontWeight: 400, color: (!anyStockHasPhotos || !hasSlots) ? '#ff6b6b' : '#aaa' }}>
               {!anyStockHasPhotos
                 ? 'ストックに写真がありません'
-                : templateSlots.length === 0
-                  ? '空き枠がありません'
+                : !hasSlots
+                  ? '写真枠がありません'
                   : 'ストックを選んで配置'}
             </div>
           </div>
@@ -3236,11 +3305,12 @@ fontFamily={item.fontFamily ?? 'sans-serif'}
                 const stockColors = ['#f26b9a', '#4caf7d', '#5b9bd5'];
                 const stockEmojis = ['🟠', '🟢', '🔵'];
                 const color = stockColors[idx];
-                const canUse = count > 0 && templateSlots.length > 0;
+                const canUse = count > 0;
+                const hasSlots = templateSlots.length > 0;
                 return (
                   <button
                     key={idx}
-                    onClick={() => canUse && handleFillAllSlots(idx)}
+                    onClick={() => canUse && handleFillStockSelected(idx)}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 12,
                       padding: '14px 16px',
@@ -3255,11 +3325,11 @@ fontFamily={item.fontFamily ?? 'sans-serif'}
                     <span style={{ fontSize: 24 }}>{stockEmojis[idx]}</span>
                     <div>
                       <div style={{ fontSize: 14, fontWeight: 700 }}>ストック{idx + 1}</div>
-                      <div style={{ fontSize: 11, color: canUse ? color : '#555', marginTop: 2 }}>
+                      <div style={{ fontSize: 11, color: count === 0 ? '#555' : !hasSlots ? '#ff6b6b' : color, marginTop: 2 }}>
                         {count === 0
                           ? '写真がありません'
-                          : templateSlots.length === 0
-                            ? '空き枠がありません'
+                          : !hasSlots
+                            ? '写真枠がありません'
                             : `${count}枚 → ${templateSlots.length}枠にランダム配置`}
                       </div>
                     </div>
@@ -3273,6 +3343,103 @@ fontFamily={item.fontFamily ?? 'sans-serif'}
           </div>
         </div>
       )}
+
+      {/* ===== ランダム配置モード選択ダイアログ ===== */}
+      {showFillModeDialog && pendingFillStockIdx !== null && (() => {
+        const filledSlotIds = new Set(
+          items
+            .filter(item => item.type === 'photo')
+            .map(item => {
+              const m = item.id.match(/^photo-slot-(.+?)-\d+/);
+              return m ? m[1] : null;
+            })
+            .filter(Boolean)
+        );
+        const hasEmptySlot = templateSlots.some(slot => !filledSlotIds.has(slot.id));
+        const emptyCount = templateSlots.filter(slot => !filledSlotIds.has(slot.id)).length;
+        const totalCount = templateSlots.length > 0
+          ? templateSlots.length
+          : items.filter(item => item.type === 'photo').length;
+        return (
+          <div
+            onClick={() => { setShowFillModeDialog(false); setPendingFillStockIdx(null); }}
+            style={{
+              position: 'fixed', inset: 0,
+              background: 'rgba(0,0,0,0.75)',
+              zIndex: 10004,
+              display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+            }}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                width: '100%', maxWidth: 500,
+                background: '#1e1e1e',
+                borderRadius: '16px 16px 0 0',
+                paddingBottom: 'env(safe-area-inset-bottom)',
+              }}
+            >
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '14px 16px 10px',
+                borderBottom: '1px solid rgba(255,255,255,0.1)',
+              }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>🎲 どのように配置しますか？</span>
+                <button
+                  onClick={() => { setShowFillModeDialog(false); setPendingFillStockIdx(null); }}
+                  style={{ background: 'none', border: 'none', color: '#aaa', fontSize: 20, cursor: 'pointer' }}
+                >✕</button>
+              </div>
+              <div style={{ padding: '12px 16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {hasEmptySlot && (
+                  <button
+                    onClick={() => handleFillAllSlots(pendingFillStockIdx, true)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 14,
+                      padding: '16px 18px',
+                      borderRadius: 12,
+                      border: '1.5px solid #4caf7d88',
+                      background: '#4caf7d18',
+                      color: '#fff',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <span style={{ fontSize: 28 }}>✨</span>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700 }}>あいている枠に入れる</div>
+                      <div style={{ fontSize: 11, color: '#4caf7d', marginTop: 3 }}>
+                        空き枠 {emptyCount} 枠にランダム配置
+                      </div>
+                    </div>
+                  </button>
+                )}
+                <button
+                  onClick={() => handleFillAllSlots(pendingFillStockIdx, false)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 14,
+                    padding: '16px 18px',
+                    borderRadius: 12,
+                    border: '1.5px solid #f26b9a88',
+                    background: '#f26b9a18',
+                    color: '#fff',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                  }}
+                >
+                  <span style={{ fontSize: 28 }}>🔀</span>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>すべて写真を入れ替える</div>
+                    <div style={{ fontSize: 11, color: '#f26b9a', marginTop: 3 }}>
+                      全 {totalCount} 枠をランダムに置換
+                    </div>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {cropImageUrl && (
         <CropModal imageUrl={cropImageUrl} initialShape={cropInitialShape} onComplete={handleCropComplete} onCancel={() => { setCropImageUrl(null); setTargetSlotId(null); setCropInitialShape(undefined); }} />
