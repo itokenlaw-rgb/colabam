@@ -1167,8 +1167,6 @@ export default function App() {
   const [photoStocks, setPhotoStocks] = useState<StockPhoto[][]>([[], [], []]);
   // 現在操作中のストックインデックス（0=ストック1, 1=ストック2, 2=ストック3）
   const [activeStockIndex, setActiveStockIndex] = useState<0 | 1 | 2>(0);
-  // ランダム配置に使うストックインデックス
-  const [fillStockIndex, setFillStockIndex] = useState<0 | 1 | 2>(0);
   // 写真追加サブメニューの表示
   const [showPhotoAddMenu, setShowPhotoAddMenu] = useState(false);
   const photoAddMenuRef = useRef<HTMLDivElement>(null);
