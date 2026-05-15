@@ -2564,8 +2564,6 @@ fontFamily={item.fontFamily ?? 'sans-serif'}
     {/* ランダム配置ボタン */}
     {(() => {
       const anyStockHasPhotos = photoStocks.some(s => s.length > 0);
-      const hasSlots = templateSlots.length > 0;
-      const canFill = anyStockHasPhotos && hasSlots;
       // ストックに写真があれば（枠が空でなくても）ボタンは押せる
       const canOpen = anyStockHasPhotos;
       return (
