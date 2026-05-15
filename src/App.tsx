@@ -1161,30 +1161,31 @@ function BgMenu({ canvasBg, setCanvasBg }: {
 export default function App() {
   // iPhoneのinputフォーカス時の自動ズームを防ぐ
   // iOS15以降はmaximum-scale=1が無視されるため、focus時にscaleを1に固定し、blur時に戻す
-  useEffect(() => {
-    const setViewport = (scale: string) => {
-      let viewport = document.querySelector('meta[name="viewport"]');
-      if (!viewport) {
-        viewport = document.createElement('meta');
-        (viewport as HTMLMetaElement).name = 'viewport';
-        document.head.appendChild(viewport);
-      }
-      viewport.setAttribute('content', `width=device-width, initial-scale=1, maximum-scale=${scale}, user-scalable=no`);
-    };
+useEffect(() => {
+  const setViewport = (content: string) => {
+    let viewport = document.querySelector('meta[name="viewport"]');
+    if (!viewport) {
+      viewport = document.createElement('meta');
+      (viewport as HTMLMetaElement).name = 'viewport';
+      document.head.appendChild(viewport);
+    }
+    viewport.setAttribute('content', content);
+  };
 
-    const onFocus = () => setViewport('1');
-    const onBlur = () => setViewport('1');
+  // iOSでの自動ズームを防ぐための決定版：
+  // initial-scale=1 に加え、maximum-scale=1 を「常に」指定し、
+  // かつユーザーによるピンチズームも無効化 (user-scalable=no) する設定です。
+  const noZoomConfig = "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no";
 
-    // 初期設定
-    setViewport('1');
+  setViewport(noZoomConfig);
 
-    document.addEventListener('focusin', onFocus);
-    document.addEventListener('focusout', onBlur);
-    return () => {
-      document.removeEventListener('focusin', onFocus);
-      document.removeEventListener('focusout', onBlur);
-    };
-  }, []);
+  // focusin/out での設定変更は不要（常に固定）にするのが最も安定します。
+  return () => {
+    // クリーンアップ時も標準的な設定に戻す
+    setViewport("width=device-width, initial-scale=1");
+  };
+}, []);
+
   const [items, setItems] = useState<CanvasItem[]>([]);
   const [history, setHistory] = useState<CanvasItem[][]>([]);
   const [templateSlots, setTemplateSlots] = useState<SlotData[]>([]);
@@ -1969,82 +1970,98 @@ const handleSlotPickFromStock = (_stockIdx: 0 | 1 | 2, stockPhotoUrl: string) =>
             </div>
           </div>
         );
-      case 'text': {
-        // 選択中のテキストアイテムがあるかどうか
-        const editingTextItem = selectedId
-          ? items.find(i => i.id === selectedId && i.type === 'text') ?? null
-          : null;
 
-        // コントロールが変化したとき：選択中アイテムがあればそれを更新、なければstateを更新
-        const handleTextColor = (c: string) => {
-          setTextColor(c);
-          if (editingTextItem) {
-            setItems(prev => prev.map(i => i.id === editingTextItem.id ? { ...i, color: c } : i));
-          }
-        };
-        const handleFontSize = (s: number) => {
-          setFontSize(s);
-          if (editingTextItem) {
-            setItems(prev => prev.map(i => i.id === editingTextItem.id ? { ...i, fontSize: s } : i));
-          }
-        };
-        const handleFontFamily = (f: string) => {
-          setFontFamily(f);
-          if (editingTextItem) {
-            setItems(prev => prev.map(i => i.id === editingTextItem.id ? { ...i, fontFamily: f } : i));
-          }
-        };
-        const handleTextStyle = (ts: TextStyleId) => {
-          setTextStyle(ts);
-          if (editingTextItem) {
-            setItems(prev => prev.map(i => i.id === editingTextItem.id ? { ...i, textStyle: ts } : i));
-          }
-        };
+case 'text': {
+  // 1. 選択中のテキストアイテムがあるか特定
+  const editingTextItem = selectedId
+    ? items.find(i => i.id === selectedId && i.type === 'text') ?? null
+    : null;
 
-        return (
-          <div className="text-menu-controls">
-            {editingTextItem ? (
-              <div style={{
-                fontSize: 11, color: 'var(--primary)', fontWeight: 'bold',
-                padding: '2px 4px 4px', textAlign: 'center',
-              }}>
-                ✏️ 選択中のテキストを編集中
-              </div>
-            ) : (
-              <input type="text" value={inputText} onChange={(e) => setInputText(e.target.value)} placeholder="文字を入力..." className="text-input" style={{ fontSize: 16 }} />
-            )}
-            <div className="control-row">
-              <input type="color" value={textColor} onChange={(e) => handleTextColor(e.target.value)} />
-              <input type="range" min="12" max="100" value={fontSize} onChange={(e) => handleFontSize(parseInt(e.target.value))} />
-              <span style={{ fontSize: 12, minWidth: 30 }}>{fontSize}px</span>
+  // 2. 各変更ハンドラー：選択中アイテムがあれば履歴を保存して更新、なければ新規用Stateを更新
+  const handleTextColor = (c: string) => {
+    setTextColor(c);
+    if (editingTextItem) {
+      setItems(prev => prev.map(i => i.id === editingTextItem.id ? { ...i, color: c } : i));
+    }
+  };
 
-              <select
-                value={fontFamily}
-                onChange={(e) => handleFontFamily(e.target.value)}
-                style={{
-                  flex: 1,
-                  minWidth: 80,
-                  padding: '5px 4px',
-                  borderRadius: '6px',
-                  border: '1px solid #ddd',
-                  fontSize: '12px',
-                  background: '#fff',
-                  cursor: 'pointer',
-                  fontFamily: fontFamily
-                }}
-              >
-                {FONT_FAMILIES.map(f => (
-                  <option key={f.name} value={f.name} style={{ fontFamily: f.name }}>
-                    {f.label}
-                  </option>
-                ))}
-              </select>
+  const handleFontSize = (s: number) => {
+    setFontSize(s);
+    if (editingTextItem) {
+      setItems(prev => prev.map(i => i.id === editingTextItem.id ? { ...i, fontSize: s } : i));
+    }
+  };
 
-              {!editingTextItem && (
-                <button onClick={() => { if (inputText.trim()) { addItem('text', inputText, { color: textColor, fontSize, textStyle, fontFamily }); setInputText(''); } }} className="add-btn">追加</button>
-              )}
-            </div>
+  const handleFontFamily = (f: string) => {
+    setFontFamily(f);
+    if (editingTextItem) {
+      setItems(prev => prev.map(i => i.id === editingTextItem.id ? { ...i, fontFamily: f } : i));
+    }
+  };
 
+  const handleTextStyle = (ts: TextStyleId) => {
+    setTextStyle(ts);
+    if (editingTextItem) {
+      setItems(prev => prev.map(i => i.id === editingTextItem.id ? { ...i, textStyle: ts } : i));
+    }
+  };
+
+  return (
+    <div className="text-menu-controls">
+      {editingTextItem ? (
+        <div style={{
+          fontSize: 11, color: 'var(--primary)', fontWeight: 'bold',
+          padding: '2px 4px 4px', textAlign: 'center',
+        }}>
+          ✏️ 選択中のテキストを編集中
+        </div>
+      ) : (
+        <input 
+          type="text" 
+          value={inputText} 
+          onChange={(e) => setInputText(e.target.value)} 
+          placeholder="文字を入力..." 
+          className="text-input" 
+          style={{ fontSize: 16 }} 
+        />
+      )}
+      
+      <div className="control-row">
+        <input type="color" value={textColor} onChange={(e) => handleTextColor(e.target.value)} />
+        <input type="range" min="12" max="100" value={fontSize} onChange={(e) => handleFontSize(parseInt(e.target.value))} />
+        <span style={{ fontSize: 12, minWidth: 30 }}>{fontSize}px</span>
+
+        <select
+          value={fontFamily}
+          onChange={(e) => handleFontFamily(e.target.value)}
+          style={{
+            flex: 1, minWidth: 80, padding: '5px 4px', borderRadius: '6px',
+            border: '1px solid #ddd', fontSize: '12px', background: '#fff',
+            cursor: 'pointer', fontFamily: fontFamily
+          }}
+        >
+          {FONT_FAMILIES.map(f => (
+            <option key={f.name} value={f.name} style={{ fontFamily: f.name }}>
+              {f.label}
+            </option>
+          ))}
+        </select>
+
+        {/* 選択中でない時だけ追加ボタンを表示 */}
+        {!editingTextItem && (
+          <button 
+            onClick={() => { 
+              if (inputText.trim()) { 
+                addItem('text', inputText, { color: textColor, fontSize, textStyle, fontFamily }); 
+                setInputText(''); 
+              } 
+            }} 
+            className="add-btn"
+          >
+            追加
+          </button>
+        )}
+      </div>
             <div className="text-style-row">
               {TEXT_STYLES.map(ts => (
                 <button
@@ -2229,18 +2246,25 @@ const handleSlotPickFromStock = (_stockIdx: 0 | 1 | 2, stockPhotoUrl: string) =>
                         setPhotoSubMenuId(item.id);
                         setPhotoSubMenuPos(getMenuPos());
                       }
-                    } else if (item.type === 'text') {
-                      // テキストアイテムをタップ → テキストメニューを開き、選択中アイテムの値をコントロールに反映
-                      setPhotoSubMenuId(null);
-                      setPhotoSubMenuPos(null);
-                      setItemSubMenuId(null);
-                      setItemSubMenuPos(null);
-                      setActiveMainTab('text');
-                      setTextColor(item.color ?? '#333333');
-                      setFontSize(item.fontSize ?? 36);
-                      setTextStyle(item.textStyle ?? 'normal');
-                      setFontFamily(item.fontFamily ?? 'sans-serif');
-                    } else if (item.type === 'stamp') {
+
+} else if (item.type === 'text') {
+  setPhotoSubMenuId(null);
+  setPhotoSubMenuPos(null);
+  setItemSubMenuId(null);
+  setItemSubMenuPos(null);
+  
+  // 1. タブをテキストに切り替える
+  setActiveMainTab('text');
+  
+  // 2. タップしたアイテムの現在の設定を、メニューのStateに同期させる
+  // これにより、スライダーやカラーピッカーが「そのアイテムの値」にセットされます
+  setTextColor(item.color ?? '#333333');
+  setFontSize(item.fontSize ?? 36);
+  setTextStyle(item.textStyle ?? 'normal');
+  setFontFamily(item.fontFamily ?? 'sans-serif');
+}
+
+ else if (item.type === 'stamp') {
                       if (itemSubMenuId === item.id) {
                         setItemSubMenuId(null);
                         setItemSubMenuPos(null);
