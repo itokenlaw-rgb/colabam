@@ -1191,7 +1191,7 @@ export default function App() {
   const [activeStockIndex, setActiveStockIndex] = useState<0 | 1 | 2>(0);
   // 写真追加サブメニューの表示
   const [showPhotoAddMenu, setShowPhotoAddMenu] = useState(false);
-  const photoAddMenuRef = useRef<HTMLDivElement>(null);
+ // const photoAddMenuRef = useRef<HTMLDivElement>(null);
   // ストック整理モーダル
   const [showStockOrganizer, setShowStockOrganizer] = useState(false);
   const [stockDeleteSelected, setStockDeleteSelected] = useState<Set<number>>(new Set());
