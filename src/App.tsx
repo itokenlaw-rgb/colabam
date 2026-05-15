@@ -147,7 +147,7 @@ const TEXT_STYLES: TextStyleDef[] = [
   { id: 'arch-down',      label: 'アーチ↓',  preview: '' },
   { id: 'wave',           label: 'ウェーブ', preview: '' },
 ];
-20260515const FONT_FAMILIES = [
+const FONT_FAMILIES = [
   { name: 'sans-serif', label: 'ゴシック' },
   { name: 'serif', label: '明朝体' },
   { name: '"M PLUS Rounded 1c", sans-serif', label: '丸ゴシック' }, // Webフォント等がある場合
@@ -175,9 +175,10 @@ function getTextCssStyle(styleId: TextStyleId | undefined, color: string, fontFa
 }
 
 // アーチ/ウェーブはSVGで描画
-function ArchText({ text, color, fontSize, styleId, width, height }: {
-  text: string; color: string; fontSize: number; styleId: TextStyleId; width: number; height: number;
+function ArchText({ text, color, fontSize, styleId, width, height, fontFamily }: { // ← fontFamily を追加
+text: string; color: string; fontSize: number; styleId: TextStyleId; width: number; height: number; fontFamily: string; // ← 型も追加
 }) {
+
   const id = `arch-${Math.random().toString(36).slice(2)}`;
   const r = width * 0.9;
   const cx = width / 2;
@@ -1156,7 +1157,7 @@ export default function App() {
 
   const [inputText, setInputText] = useState('');
   const [textColor, setTextColor] = useState('#333333');
-  const [fontSize, setFontSize] = useState(24);
+  const [fontSize, setFontSize] = useState(36);
   const [textStyle, setTextStyle] = useState<TextStyleId>('normal');
   const [fontFamily, setFontFamily] = useState('sans-serif');
 
@@ -1782,30 +1783,32 @@ export default function App() {
               <input type="color" value={textColor} onChange={(e) => setTextColor(e.target.value)} />
               <input type="range" min="12" max="100" value={fontSize} onChange={(e) => setFontSize(parseInt(e.target.value))} />
               <span style={{ fontSize: 12, minWidth: 30 }}>{fontSize}px</span>
+
+{/* ★ここへ移動：幅を調整したフォント選択プルダウン */}
+              <select
+                value={fontFamily}
+                onChange={(e) => setFontFamily(e.target.value)}
+                style={{
+                  flex: 1, // 空いているスペースを埋める
+                  minWidth: 80,
+                  padding: '5px 4px',
+                  borderRadius: '6px',
+                  border: '1px solid #ddd',
+                  fontSize: '12px',
+                  background: '#fff',
+                  cursor: 'pointer',
+                  fontFamily: fontFamily
+                }}
+              >
+                {FONT_FAMILIES.map(f => (
+                  <option key={f.name} value={f.name} style={{ fontFamily: f.name }}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+
               <button onClick={() => { if (inputText.trim()) { addItem('text', inputText, { color: textColor, fontSize, textStyle,fontFamily }); setInputText(''); } }} className="add-btn">追加</button>
             </div>
-
-{/* text-style-row の前か後に追加 */}
-<div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: '8px' }}>
-  {FONT_FAMILIES.map(f => (
-    <button
-      key={f.name}
-      onClick={() => setFontFamily(f.name)}
-      style={{
-        padding: '4px 10px',
-        borderRadius: '6px',
-        border: `2px solid ${fontFamily === f.name ? 'var(--primary)' : '#ddd'}`,
-        background: fontFamily === f.name ? '#fff0f5' : 'white',
-        fontSize: '11px',
-        whiteSpace: 'nowrap',
-        cursor: 'pointer',
-        fontFamily: f.name // ボタン自体の文字もそのフォントにする
-      }}
-    >
-      {f.label}
-    </button>
-  ))}
-</div>
 
             <div className="text-style-row">
               {TEXT_STYLES.map(ts => (
@@ -2023,6 +2026,7 @@ export default function App() {
                               styleId={sid!}
                               width={item.width}
                               height={item.height}
+fontFamily={item.fontFamily ?? 'sans-serif'}
                             />
                           </div>
                         );
