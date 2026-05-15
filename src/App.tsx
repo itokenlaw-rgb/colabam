@@ -1561,7 +1561,7 @@ export default function App() {
   };
 
   // 枠を全部埋める（ストックからランダム）
-  const handleFillAllSlots = (stockIdx: 0 | 1 | 2 = fillStockIndex) => {
+  const handleFillAllSlots = (stockIdx: 0 | 1 | 2) => {
     const photoStock = photoStocks[stockIdx];
     if (photoStock.length === 0) {
       alert(`ストック${stockIdx + 1}に写真がありません。先に写真を追加してください。`);
