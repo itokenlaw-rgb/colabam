@@ -1189,6 +1189,10 @@ export default function App() {
   // ストック選択ポップアップ（ランダム配置用）
   const [showFillStockPicker, setShowFillStockPicker] = useState(false);
 
+  // 枠クリック時の写真選択元メニュー
+  const [showSlotPickerMenu, setShowSlotPickerMenu] = useState(false);
+  const [slotPickerTargetId, setSlotPickerTargetId] = useState<string | null>(null);
+
   const canvasRef = useRef<HTMLDivElement>(null);
   const maxZIndex = useRef(10);
 
@@ -1395,47 +1399,81 @@ export default function App() {
   };
 
   const handleSlotClick = (slotId: string) => {
-    setTargetSlotId(slotId);
     const slot = templateSlots.find(s => s.id === slotId);
     const style = slot?.style ?? {};
     const ratio = slot ? slot.width / slot.height : 1;
-
-    // clipPath で形状判定
     const clipPath = (style as React.CSSProperties).clipPath as string | undefined;
-    // borderRadius で円系判定
     const isRound = (style as React.CSSProperties).borderRadius === '50%';
-
     let shape: typeof cropInitialShape = undefined;
-
     if (clipPath?.includes('50% 15%') || clipPath?.includes('50% 25%') || clipPath?.includes('50% 0%, 80%')) {
-      // ハート判定（buildRandomSlots / buildCustomSlots 両方に対応）
       shape = 'heart';
     } else if (clipPath?.includes('61% 35%') || clipPath?.includes('61.8%') || clipPath?.includes('50% 0%, 61%')) {
-      // 星判定（buildRandomSlots / buildCustomSlots 両方に対応）
       shape = 'star';
     } else if (isRound) {
-      // 円 or 楕円（アスペクト比で区別）
-      if (ratio > 1.15) {
-        shape = 'ellipse-h'; // 横長楕円
-      } else if (ratio < 0.85) {
-        shape = 'ellipse';   // 縦長楕円
-      } else {
-        shape = 'circle';    // 正円
-      }
+      if (ratio > 1.15) shape = 'ellipse-h';
+      else if (ratio < 0.85) shape = 'ellipse';
+      else shape = 'circle';
     } else {
-      // 四角系（アスペクト比で区別）
-      if (ratio > 1.15) {
-        shape = 'rectangle-h'; // 横長方形
-      } else if (ratio < 0.85) {
-        shape = 'rectangle';   // 縦長方形
-      } else {
-        shape = 'square';      // 正方形
-      }
+      if (ratio > 1.15) shape = 'rectangle-h';
+      else if (ratio < 0.85) shape = 'rectangle';
+      else shape = 'square';
     }
-
     setCropInitialShape(shape);
-    document.getElementById('photo-upload')?.click();
+    setTargetSlotId(slotId);
+    setSlotPickerTargetId(slotId);
+    setShowSlotPickerMenu(true);
   };
+
+  // ストックから1枚を選んでクロップなしで枠に配置するヘルパー
+const handleSlotPickFromStock = (stockIdx: 0 | 1 | 2, stockPhotoUrl: string) => {
+  maxZIndex.current += 1;
+
+  if (slotPickerTargetId) {
+    // 【パターンA】空のスロット（枠）をクリックして選んだ場合
+    const slot = templateSlots.find(s => s.id === slotPickerTargetId);
+    if (!slot) return;
+    const clipShape = slotStyleToClipShape(slot);
+    
+    const newItem: CanvasItem = {
+      id: `photo-slot-${slot.id}-${Date.now()}`,
+      type: 'photo',
+      content: stockPhotoUrl,
+      originalImageUrl: stockPhotoUrl,
+      x: slot.x,
+      y: slot.y,
+      width: slot.width,
+      height: slot.height,
+      rotation: slot.rotation ?? 0,
+      zIndex: maxZIndex.current,
+      clipShape,
+    };
+    pushHistory(items);
+    setItems(prev => [...prev, newItem]);
+    setTemplateSlots(prev => prev.filter(s => s.id !== slotPickerTargetId));
+  } else {
+    // 【パターンB】「写真追加」→「1枚追加」から選んだ場合
+    // クロップ画面を挟まずに、ストック写真をそのまま正方形として追加
+    const newItem: CanvasItem = {
+      id: `photo-direct-${Date.now()}`,
+      type: 'photo',
+      content: stockPhotoUrl,
+      originalImageUrl: stockPhotoUrl,
+      x: 50,
+      y: 50,
+      width: 120,
+      height: 120,
+      rotation: 0,
+      zIndex: maxZIndex.current,
+    };
+    pushHistory(items);
+    setItems(prev => [...prev, newItem]);
+  }
+
+  // 共通のクリーンアップ
+  setShowSlotPickerMenu(false);
+  setSlotPickerTargetId(null);
+  setTargetSlotId(null);
+};
 
   const handleItemRotate = useCallback((id: string, newRotation: number) => {
     setItems(prev => prev.map(i => i.id === id ? { ...i, rotation: newRotation } : i));
@@ -2260,44 +2298,43 @@ fontFamily={item.fontFamily ?? 'sans-serif'}
               <ImagePlus size={20} /><span>写真追加</span>
             </button>
 
-{/* 写真追加サブメニュー */}
+{/* 修正後の「写真追加」サブメニュー部分 */}
 {showPhotoAddMenu && (
   <div
+    className="sub-menu"
     onClick={e => e.stopPropagation()}
     style={{
-      position: 'fixed',
-      bottom: 70,
-      left: '50%',
-      transform: 'translateX(-50%)',
-      background: 'rgba(30,30,30,0.96)',
-      borderRadius: 12,
-      boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
-      overflow: 'hidden',
-      minWidth: 200,
-      zIndex: 9999,
+      height: 'auto',
+      maxHeight: '180px',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '0', // 境界線で分けるため0に
+      padding: '0',
+      overflowX: 'hidden'
     }}
   >
     {/* 1枚追加ボタン */}
     <button
       onPointerDown={e => e.stopPropagation()}
       onClick={() => { 
-        // ここでメニューを閉じないように修正（以前は false にしていました）
-        setTargetSlotId(null); 
-        document.getElementById('photo-upload')?.click(); 
+        setTargetSlotId(null);
+        setSlotPickerTargetId(null);
+        setShowSlotPickerMenu(true);
+        setShowPhotoAddMenu(false);
       }}
       style={{
-        display: 'flex', alignItems: 'center', gap: 10,
+        display: 'flex', alignItems: 'center', gap: 12,
         width: '100%', padding: '12px 16px',
         background: 'transparent', border: 'none',
-        borderBottom: '1px solid rgba(255,255,255,0.1)',
-        color: '#fff', fontSize: 13, fontWeight: 600,
+        borderBottom: '1px solid #eee',
+        color: '#333', fontSize: 13, fontWeight: 600,
         cursor: 'pointer', textAlign: 'left',
       }}
     >
       <span style={{ fontSize: 18, minWidth: 24 }}>📷</span>
       <div>
         <div>１枚追加</div>
-        <div style={{ fontSize: 10, color: '#aaa', fontWeight: 400 }}>写真を1枚選んで追加</div>
+        <div style={{ fontSize: 10, color: '#888', fontWeight: 400 }}>写真を選んでキャンバスに追加</div>
       </div>
     </button>
 
@@ -2305,16 +2342,15 @@ fontFamily={item.fontFamily ?? 'sans-serif'}
     <button
       onPointerDown={e => e.stopPropagation()}
       onClick={() => { 
-        // ここでもメニューを閉じないように修正（管理画面から戻った時にメニューを残すため）
         setStockDeleteSelected(new Set()); 
         setShowStockOrganizer(true); 
       }}
       style={{
-        display: 'flex', alignItems: 'center', gap: 10,
+        display: 'flex', alignItems: 'center', gap: 12,
         width: '100%', padding: '12px 16px',
         background: 'transparent', border: 'none',
-        borderBottom: '1px solid rgba(255,255,255,0.1)',
-        color: '#fff', fontSize: 13, fontWeight: 600,
+        borderBottom: '1px solid #eee',
+        color: '#333', fontSize: 13, fontWeight: 600,
         cursor: 'pointer', textAlign: 'left',
       }}
     >
@@ -2338,15 +2374,14 @@ fontFamily={item.fontFamily ?? 'sans-serif'}
           onClick={() => {
             if (!canFill) return;
             setShowFillStockPicker(true);
-            setShowPhotoAddMenu(false); // 配置実行の選択肢が出るタイミングでは閉じる
+            setShowPhotoAddMenu(false);
           }}
           style={{
-            display: 'flex', alignItems: 'center', gap: 10,
+            display: 'flex', alignItems: 'center', gap: 12,
             width: '100%', padding: '12px 16px',
-            background: canFill ? 'rgba(100,200,120,0.15)' : 'transparent',
+            background: canFill ? '#fff5f8' : 'transparent',
             border: 'none',
-            borderBottom: anyStockHasPhotos ? '1px solid rgba(255,255,255,0.1)' : 'none',
-            color: canFill ? '#6ec87a' : '#666',
+            color: canFill ? 'var(--primary)' : '#ccc',
             fontSize: 13, fontWeight: 600,
             cursor: canFill ? 'pointer' : 'default',
             textAlign: 'left',
@@ -2962,6 +2997,143 @@ fontFamily={item.fontFamily ?? 'sans-serif'}
           </div>
         );
       })()}
+
+      {/* ===== 枠クリック時の写真選択元メニュー ===== */}
+      {showSlotPickerMenu && (
+        <div
+          onClick={() => { setShowSlotPickerMenu(false); setSlotPickerTargetId(null); setTargetSlotId(null); }}
+          style={{
+            position: 'fixed', inset: 0,
+            background: 'rgba(0,0,0,0.6)',
+            zIndex: 10003,
+            display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: '100%', maxWidth: 500,
+              background: '#1e1e1e',
+              borderRadius: '16px 16px 0 0',
+              paddingBottom: 'env(safe-area-inset-bottom)',
+            }}
+          >
+            {/* ヘッダー */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '14px 16px 10px',
+              borderBottom: '1px solid rgba(255,255,255,0.1)',
+            }}>
+              <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>📷 写真をどこから選ぶ？</span>
+              <button
+                onClick={() => { setShowSlotPickerMenu(false); setSlotPickerTargetId(null); setTargetSlotId(null); }}
+                style={{ background: 'none', border: 'none', color: '#aaa', fontSize: 20, cursor: 'pointer' }}
+              >✕</button>
+            </div>
+
+            <div style={{ padding: '12px 16px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {/* デバイスから選ぶ */}
+              <button
+                onClick={() => {
+                  setShowSlotPickerMenu(false);
+                  document.getElementById('photo-upload')?.click();
+                }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '14px 16px',
+                  borderRadius: 12,
+                  border: '1.5px solid rgba(255,255,255,0.2)',
+                  background: 'rgba(255,255,255,0.06)',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                <span style={{ fontSize: 26 }}>📱</span>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700 }}>デバイスから選ぶ</div>
+                  <div style={{ fontSize: 11, color: '#aaa', marginTop: 2 }}>カメラロールや写真アプリから</div>
+                </div>
+              </button>
+
+              {/* ストック1〜3 */}
+              {([0, 1, 2] as const).map(idx => {
+                const stockColors = ['#f26b9a', '#4caf7d', '#5b9bd5'];
+                const stockEmojis = ['🟠', '🟢', '🔵'];
+                const color = stockColors[idx];
+                const stock = photoStocks[idx];
+                const count = stock.length;
+                const canUse = count > 0;
+                return (
+                  <div key={idx}>
+                    {/* ストックボタン（ヘッダー行） */}
+                    <button
+                      onClick={() => {/* 展開はサムネイルグリッドで対応 */}}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 12,
+                        padding: '10px 16px 6px',
+                        width: '100%',
+                        borderRadius: canUse ? '12px 12px 0 0' : 12,
+                        border: `1.5px solid ${canUse ? color + '88' : 'rgba(255,255,255,0.08)'}`,
+                        borderBottom: canUse ? 'none' : undefined,
+                        background: canUse ? `${color}18` : 'rgba(255,255,255,0.03)',
+                        color: canUse ? '#fff' : '#555',
+                        cursor: 'default',
+                        textAlign: 'left',
+                      }}
+                    >
+                      <span style={{ fontSize: 22 }}>{stockEmojis[idx]}</span>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 700 }}>ストック{idx + 1}から選ぶ</div>
+                        <div style={{ fontSize: 11, color: canUse ? color : '#555', marginTop: 1 }}>
+                          {count === 0 ? '写真がありません' : `${count}枚`}
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* サムネイルグリッド */}
+                    {canUse && (
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(4, 1fr)',
+                        gap: 3,
+                        padding: '6px 8px 8px',
+                        background: `${color}10`,
+                        border: `1.5px solid ${color}88`,
+                        borderTop: 'none',
+                        borderRadius: '0 0 12px 12px',
+                        maxHeight: 150,
+                        overflowY: 'auto',
+                      }}>
+                        {stock.map((photo, photoIdx) => (
+                          <div
+                            key={photoIdx}
+                            onClick={() => handleSlotPickFromStock(idx, photo.url)}
+                            style={{
+                              aspectRatio: '1/1',
+                              borderRadius: 6,
+                              overflow: 'hidden',
+                              cursor: 'pointer',
+                              border: `1.5px solid ${color}55`,
+                              flexShrink: 0,
+                            }}
+                          >
+                            <img
+                              src={photo.url}
+                              alt=""
+                              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ===== ランダム配置ストック選択ポップアップ ===== */}
       {showFillStockPicker && (
