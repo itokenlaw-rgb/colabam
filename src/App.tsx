@@ -1159,6 +1159,18 @@ function BgMenu({ canvasBg, setCanvasBg }: {
 
 // ===== Main App =====
 export default function App() {
+  // iPhoneのinputフォーカス時の自動ズームを防ぐ（横幅が拡大されないようにする）
+  useEffect(() => {
+    const viewport = document.querySelector('meta[name="viewport"]');
+    if (viewport) {
+      viewport.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
+    } else {
+      const meta = document.createElement('meta');
+      meta.name = 'viewport';
+      meta.content = 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no';
+      document.head.appendChild(meta);
+    }
+  }, []);
   const [items, setItems] = useState<CanvasItem[]>([]);
   const [history, setHistory] = useState<CanvasItem[][]>([]);
   const [templateSlots, setTemplateSlots] = useState<SlotData[]>([]);
@@ -1985,7 +1997,7 @@ const handleSlotPickFromStock = (_stockIdx: 0 | 1 | 2, stockPhotoUrl: string) =>
                 ✏️ 選択中のテキストを編集中
               </div>
             ) : (
-              <input type="text" value={inputText} onChange={(e) => setInputText(e.target.value)} placeholder="文字を入力..." className="text-input" />
+              <input type="text" value={inputText} onChange={(e) => setInputText(e.target.value)} placeholder="文字を入力..." className="text-input" style={{ fontSize: 16 }} />
             )}
             <div className="control-row">
               <input type="color" value={textColor} onChange={(e) => handleTextColor(e.target.value)} />
