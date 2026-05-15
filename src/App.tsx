@@ -1514,7 +1514,7 @@ export default function App() {
     const files = Array.from(e.target.files ?? []);
     if (files.length === 0) return;
     e.target.value = '';
-    setShowPhotoAddMenu(false);
+    // サブメニューは閉じない（写真選択後もメニューを表示したまま）
     const photos = await Promise.all(files.map(fileToStockPhoto));
     // Exif日付を持つ写真が1枚以上あれば日付フィルタUIを表示
     const hasDate = photos.some(p => p.takenAt !== null);
@@ -2277,10 +2277,10 @@ export default function App() {
                     display: 'flex', alignItems: 'center', gap: 10,
                     width: '100%', padding: '12px 16px',
                     background: photoStock.length > 0 && templateSlots.length > 0
-                      ? 'rgba(242,107,154,0.18)' : 'transparent',
+                      ? 'rgba(100,200,120,0.15)' : 'transparent',
                     border: 'none',
                     borderBottom: photoStock.length > 0 ? '1px solid rgba(255,255,255,0.1)' : 'none',
-                    color: photoStock.length > 0 && templateSlots.length > 0 ? '#f26b9a' : '#666',
+                    color: photoStock.length > 0 && templateSlots.length > 0 ? '#6ec87a' : '#666',
                     fontSize: 13, fontWeight: 600,
                     cursor: photoStock.length > 0 && templateSlots.length > 0 ? 'pointer' : 'default',
                     textAlign: 'left',
@@ -2289,7 +2289,9 @@ export default function App() {
                   <span style={{ fontSize: 18, minWidth: 24 }}>🎲</span>
                   <div>
                     <div>ストックから枠に<br />ランダムで入れる</div>
-                    <div style={{ fontSize: 10, color: '#aaa', fontWeight: 400 }}>
+                    <div style={{ fontSize: 10, fontWeight: 400,
+                      color: (photoStock.length === 0 || templateSlots.length === 0) ? '#ff6b6b' : '#aaa'
+                    }}>
                       {photoStock.length === 0
                         ? 'ストックに写真がありません'
                         : templateSlots.length === 0
