@@ -2579,7 +2579,7 @@ fontFamily={item.fontFamily ?? 'sans-serif'}
     {(() => {
       const anyStockHasPhotos = photoStocks.some(s => s.length > 0);
       // ストックに写真があれば（枠が空でなくても）ボタンは押せる
-      const canOpen = anyStockHasPhotos;
+const canOpen = anyStockHasPhotos;
       return (
         <button
           onPointerDown={e => e.stopPropagation()}
@@ -2602,10 +2602,10 @@ fontFamily={item.fontFamily ?? 'sans-serif'}
           <span style={{ fontSize: 18, minWidth: 24 }}>🎲</span>
           <div>
             <div>ストックから枠にランダムで入れる</div>
-            <div style={{ fontSize: 10, fontWeight: 400, color: (!anyStockHasPhotos || !hasSlots) ? '#ff6b6b' : '#aaa' }}>
+            <div style={{ fontSize: 10, fontWeight: 400, color: (!anyStockHasPhotos || templateSlots.length === 0) ? '#ff6b6b' : '#aaa' }}>
               {!anyStockHasPhotos
                 ? 'ストックに写真がありません'
-                : !hasSlots
+                : templateSlots.length === 0
                   ? '写真枠がありません'
                   : 'ストックを選んで配置'}
             </div>
