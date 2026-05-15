@@ -30,7 +30,7 @@ function extractExifDate(file: File): Promise<Date | null> {
           const marker = view.getUint16(offset);
           offset += 2;
           if (marker === 0xFFE1) { // APP1 (Exif)
-            offset += 2; // segLenの代わり。getUint16で2バイト分進んでいるため);
+            offset += 2; // segLenの代わり。getUint16で2バイト分進んでいるためt);
             const exifHeader = String.fromCharCode(
               view.getUint8(offset + 2), view.getUint8(offset + 3),
               view.getUint8(offset + 4), view.getUint8(offset + 5)
@@ -716,8 +716,10 @@ const BG_SERIES: BgSeries[] = [
   {
     id: 's1',
     label: '水彩',
-    files: Array.from({ length: 12 }, (_, i) => `/colabam_bimg${101 + i}.jpg`),
+    files: [
+      ...Array.from({ length: 12 }, (_, i) => `/colabam_bimg${101 + i}.jpg`),
       '/colabam_bimg997.jpg',
+    ],
   },
   {
     id: 's2',
@@ -1154,12 +1156,9 @@ export default function App() {
     bgPhotoOpacity?: number; // 写真背景の不透明度 0〜1
     bgPhotoUrl?: string;   // デバイス写真から選んだ背景URL
   }>(() => {
-
-// 997, 998, 999 の中からランダムに1つ選ぶ
-  const bgNumbers = [997, 998, 999];
-  const randomIndex = Math.floor(Math.random() * bgNumbers.length);
-  const initialBgImage = `/colabam_bimg${bgNumbers[randomIndex]}.jpg`;
-
+    // アプリ起動時の秒数が偶数→998、奇数→999 をデフォルト背景に
+    const randomBgImages = ['/colabam_bimg997.jpg', '/colabam_bimg998.jpg', '/colabam_bimg999.jpg'];
+    const initialBgImage = randomBgImages[Math.floor(Math.random() * randomBgImages.length)];
     return { color: '#fffbe6', color2: '#f26b9a', pattern: 'none', patternType: 'solid', gradientDir: 'to bottom', bgImage: initialBgImage, bgPhotoOpacity: 1, bgPhotoUrl: undefined };
   });
   const [targetSlotId, setTargetSlotId] = useState<string | null>(null);
@@ -1312,7 +1311,8 @@ export default function App() {
     pushHistory(items);
     setItems([]);
     setTemplateSlots([]);
-    const resetBgImage = new Date().getSeconds() % 2 === 0 ? '/colabam_bimg998.jpg' : '/colabam_bimg999.jpg';
+    const randomBgImages = ['/colabam_bimg997.jpg', '/colabam_bimg998.jpg', '/colabam_bimg999.jpg'];
+    const resetBgImage = randomBgImages[Math.floor(Math.random() * randomBgImages.length)];
     setCanvasBg({ color: '#fffbe6', color2: '#f26b9a', pattern: 'none', patternType: 'solid', gradientDir: 'to bottom', bgImage: resetBgImage, bgPhotoOpacity: 1, bgPhotoUrl: undefined });
   };
 
@@ -3227,8 +3227,9 @@ fontFamily={item.fontFamily ?? 'sans-serif'}
         <CropModal imageUrl={cropImageUrl} initialShape={cropInitialShape} onComplete={handleCropComplete} onCancel={() => { setCropImageUrl(null); setTargetSlotId(null); setCropInitialShape(undefined); }} />
       )}
 
-{previewUrl && (
+      {previewUrl && (
         <PreviewModal dataUrl={previewUrl} onClose={() => setPreviewUrl(null)} />
       )}
     </div>
   );
+}
