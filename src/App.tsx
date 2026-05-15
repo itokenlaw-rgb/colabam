@@ -482,17 +482,36 @@ function getClipPathStyle(shape: ClipShape): React.CSSProperties {
   return {};
 }
 
-// ===== Preview Modal =====
+// PreviewModal コンポーネントを以下のように書き換えます
 function PreviewModal({ dataUrl, onClose }: { dataUrl: string; onClose: () => void }) {
   return (
     <div className="preview-overlay" onClick={onClose}>
       <div className="preview-modal" onClick={e => e.stopPropagation()}>
-        <img src={dataUrl} alt="preview" className="preview-img" />
-        <div className="preview-actions">
-          <a href={dataUrl} download={`colabam-${Date.now()}.jpg`} className="preview-btn save">
-            📥 画像を保存
-          </a>
-          <button className="preview-btn close" onClick={onClose}>閉じる</button>
+        <div style={{ marginBottom: '10px', fontWeight: 'bold', color: '#fff' }}>完成画像</div>
+        
+        {/* 画像本体 */}
+        <img src={dataUrl} alt="preview" className="preview-img" style={{ maxWidth: '100%', maxHeight: '60vh', borderRadius: '8px' }} />
+        
+        {/* iPhoneユーザー向けの案内メッセージ */}
+        <div style={{ 
+          color: '#eee', 
+          fontSize: '13px', 
+          textAlign: 'center', 
+          marginTop: '15px', 
+          padding: '10px',
+          background: 'rgba(255,255,255,0.1)',
+          borderRadius: '8px',
+          lineHeight: '1.5'
+        }}>
+          上の画像を<strong>長押し</strong>して<br />
+          <strong>「"写真"に追加」</strong>を選択すると<br />
+          カメラロールに保存されます。
+        </div>
+
+        <div className="preview-actions" style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'center' }}>
+          <button className="preview-btn close" onClick={onClose} style={{ padding: '10px 20px', borderRadius: '20px', border: 'none', cursor: 'pointer' }}>
+            閉じる
+          </button>
         </div>
       </div>
     </div>
@@ -1399,20 +1418,49 @@ export default function App() {
     pendingOriginalUrl.current = null;
   };
 
-  const saveAlbum = async () => {
-    setSelectedId(null);
-    await new Promise(r => setTimeout(r, 50));
-    if (!canvasRef.current) return;
+// Appコンポーネント内の saveAlbum 関数を以下のように書き換えます
+
+const saveAlbum = async () => {
+  setSelectedId(null);
+  // レンダリング待ち
+  await new Promise(r => setTimeout(r, 100));
+  
+  if (!canvasRef.current) return;
+
+  try {
     const scale = EXPORT_W / CANVAS_W;
     const canvas = await html2canvas(canvasRef.current, {
       useCORS: true,
       scale,
       width: CANVAS_W,
       height: CANVAS_H,
+      backgroundColor: '#000', // 背景色を明示
     });
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
-    setPreviewUrl(dataUrl);
-  };
+
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.90);
+
+    // --- ここから iPhone 共有機能の呼び出し ---
+    const res = await fetch(dataUrl);
+    const blob = await res.blob();
+    const file = new File([blob], `my-album-${Date.now()}.jpg`, { type: 'image/jpeg' });
+
+    // ブラウザが共有機能に対応しているかチェック (iPhone Safariなど)
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({
+        files: [file],
+        title: 'アルバム保存',
+      });
+    } else {
+      // 共有に対応していない（PCなど）場合は、従来のプレビューモーダルを表示
+      setPreviewUrl(dataUrl);
+    }
+    // ---------------------------------------
+
+  } catch (err) {
+    console.error("保存に失敗しました", err);
+    alert("画像の生成に失敗しました。");
+  }
+};
 
   const handleSlotClick = (slotId: string) => {
     const slot = templateSlots.find(s => s.id === slotId);
