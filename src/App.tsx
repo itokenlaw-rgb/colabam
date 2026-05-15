@@ -1159,17 +1159,31 @@ function BgMenu({ canvasBg, setCanvasBg }: {
 
 // ===== Main App =====
 export default function App() {
-  // iPhoneのinputフォーカス時の自動ズームを防ぐ（横幅が拡大されないようにする）
+  // iPhoneのinputフォーカス時の自動ズームを防ぐ
+  // iOS15以降はmaximum-scale=1が無視されるため、focus時にscaleを1に固定し、blur時に戻す
   useEffect(() => {
-    const viewport = document.querySelector('meta[name="viewport"]');
-    if (viewport) {
-      viewport.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
-    } else {
-      const meta = document.createElement('meta');
-      meta.name = 'viewport';
-      meta.content = 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no';
-      document.head.appendChild(meta);
-    }
+    const setViewport = (scale: string) => {
+      let viewport = document.querySelector('meta[name="viewport"]');
+      if (!viewport) {
+        viewport = document.createElement('meta');
+        (viewport as HTMLMetaElement).name = 'viewport';
+        document.head.appendChild(viewport);
+      }
+      viewport.setAttribute('content', `width=device-width, initial-scale=1, maximum-scale=${scale}, user-scalable=no`);
+    };
+
+    const onFocus = () => setViewport('1');
+    const onBlur = () => setViewport('1');
+
+    // 初期設定
+    setViewport('1');
+
+    document.addEventListener('focusin', onFocus);
+    document.addEventListener('focusout', onBlur);
+    return () => {
+      document.removeEventListener('focusin', onFocus);
+      document.removeEventListener('focusout', onBlur);
+    };
   }, []);
   const [items, setItems] = useState<CanvasItem[]>([]);
   const [history, setHistory] = useState<CanvasItem[][]>([]);
