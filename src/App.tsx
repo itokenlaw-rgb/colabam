@@ -147,9 +147,15 @@ const TEXT_STYLES: TextStyleDef[] = [
   { id: 'arch-down',      label: 'アーチ↓',  preview: '' },
   { id: 'wave',           label: 'ウェーブ', preview: '' },
 ];
+20260515const FONT_FAMILIES = [
+  { name: 'sans-serif', label: 'ゴシック' },
+  { name: 'serif', label: '明朝体' },
+  { name: '"M PLUS Rounded 1c", sans-serif', label: '丸ゴシック' }, // Webフォント等がある場合
+  { name: '"Permanent Marker", cursive', label: '手書き風' },
+];
 
-function getTextCssStyle(styleId: TextStyleId | undefined, color: string): React.CSSProperties {
-  const base: React.CSSProperties = { color };
+function getTextCssStyle(styleId: TextStyleId | undefined, color: string, fontFamily: string): React.CSSProperties {
+  const base: React.CSSProperties = { color, fontFamily }; // ← fontFamily を追加
   switch (styleId) {
     case 'shadow':
       return { ...base, textShadow: '2px 3px 6px rgba(0,0,0,0.55)' };
@@ -198,7 +204,7 @@ function ArchText({ text, color, fontSize, styleId, width, height }: {
               textAnchor="middle"
               dominantBaseline="middle"
               fontSize={fontSize}
-              fontFamily="sans-serif"
+              fontFamily={fontFamily}
               fill={color}
               transform={`rotate(${rot}, ${x}, ${y})`}
               style={{ filter: `drop-shadow(1.5px 2px 2px rgba(0,0,0,0.5))` }}
@@ -224,7 +230,7 @@ function ArchText({ text, color, fontSize, styleId, width, height }: {
       </defs>
       <text
         fontSize={fontSize}
-        fontFamily="sans-serif"
+        fontFamily={fontFamily}
         fill={color}
         style={{ filter: `drop-shadow(1.5px 2px 3px rgba(0,0,0,0.45))` }}
       >
@@ -1152,6 +1158,7 @@ export default function App() {
   const [textColor, setTextColor] = useState('#333333');
   const [fontSize, setFontSize] = useState(24);
   const [textStyle, setTextStyle] = useState<TextStyleId>('normal');
+  const [fontFamily, setFontFamily] = useState('sans-serif');
 
   // 写真サブメニュー用state
   const [photoSubMenuId, setPhotoSubMenuId] = useState<string | null>(null);
@@ -1775,8 +1782,31 @@ export default function App() {
               <input type="color" value={textColor} onChange={(e) => setTextColor(e.target.value)} />
               <input type="range" min="12" max="100" value={fontSize} onChange={(e) => setFontSize(parseInt(e.target.value))} />
               <span style={{ fontSize: 12, minWidth: 30 }}>{fontSize}px</span>
-              <button onClick={() => { if (inputText.trim()) { addItem('text', inputText, { color: textColor, fontSize, textStyle }); setInputText(''); } }} className="add-btn">追加</button>
+              <button onClick={() => { if (inputText.trim()) { addItem('text', inputText, { color: textColor, fontSize, textStyle,fontFamily }); setInputText(''); } }} className="add-btn">追加</button>
             </div>
+
+{/* text-style-row の前か後に追加 */}
+<div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: '8px' }}>
+  {FONT_FAMILIES.map(f => (
+    <button
+      key={f.name}
+      onClick={() => setFontFamily(f.name)}
+      style={{
+        padding: '4px 10px',
+        borderRadius: '6px',
+        border: `2px solid ${fontFamily === f.name ? 'var(--primary)' : '#ddd'}`,
+        background: fontFamily === f.name ? '#fff0f5' : 'white',
+        fontSize: '11px',
+        whiteSpace: 'nowrap',
+        cursor: 'pointer',
+        fontFamily: f.name // ボタン自体の文字もそのフォントにする
+      }}
+    >
+      {f.label}
+    </button>
+  ))}
+</div>
+
             <div className="text-style-row">
               {TEXT_STYLES.map(ts => (
                 <button
@@ -1998,12 +2028,15 @@ export default function App() {
                         );
                       }
                       return (
-                        <div
-                          className="item-text drag-handle"
-                          style={{ ...getTextCssStyle(sid, item.color ?? '#333333'), fontSize: `${item.fontSize}px` }}
-                        >
-                          {item.content}
-                        </div>
+<div
+  className="item-text drag-handle"
+  style={{ 
+    ...getTextCssStyle(sid, item.color ?? '#333333', item.fontFamily ?? 'sans-serif'), // ← 引数追加
+    fontSize: `${item.fontSize}px` 
+  }}
+>
+  {item.content}
+</div>
                       );
                     })()
                   ) : item.type === 'stamp' ? (
@@ -2243,7 +2276,11 @@ export default function App() {
     {/* 1枚追加ボタン */}
     <button
       onPointerDown={e => e.stopPropagation()}
-      onClick={() => { setShowPhotoAddMenu(false); setTargetSlotId(null); document.getElementById('photo-upload')?.click(); }}
+      onClick={() => { 
+        // ここでメニューを閉じないように修正（以前は false にしていました）
+        setTargetSlotId(null); 
+        document.getElementById('photo-upload')?.click(); 
+      }}
       style={{
         display: 'flex', alignItems: 'center', gap: 10,
         width: '100%', padding: '12px 16px',
@@ -2260,10 +2297,14 @@ export default function App() {
       </div>
     </button>
 
-    {/* ストック管理ボタン（枚数表示を追加） */}
+    {/* ストック管理ボタン */}
     <button
       onPointerDown={e => e.stopPropagation()}
-      onClick={() => { setShowPhotoAddMenu(false); setStockDeleteSelected(new Set()); setShowStockOrganizer(true); }}
+      onClick={() => { 
+        // ここでもメニューを閉じないように修正（管理画面から戻った時にメニューを残すため）
+        setStockDeleteSelected(new Set()); 
+        setShowStockOrganizer(true); 
+      }}
       style={{
         display: 'flex', alignItems: 'center', gap: 10,
         width: '100%', padding: '12px 16px',
@@ -2278,7 +2319,7 @@ export default function App() {
         <div>ストックを管理する</div>
         <div style={{ fontSize: 10, color: '#aaa', fontWeight: 400 }}>ストックの写真を追加・削除</div>
         <div style={{ fontSize: 9, color: '#f26b9a', fontWeight: 400, marginTop: 2 }}>
-          {`ｽﾄｯｸ1：${photoStocks[0].length}枚、ｽﾄｯｸ2：${photoStocks[1].length}枚、ｽﾄｯｸ3：${photoStocks[2].length}枚`}
+          {`ストック１：${photoStocks[0].length}枚、ストック２：${photoStocks[1].length}枚、ストック３：${photoStocks[2].length}枚`}
         </div>
       </div>
     </button>
@@ -2293,7 +2334,7 @@ export default function App() {
           onClick={() => {
             if (!canFill) return;
             setShowFillStockPicker(true);
-            setShowPhotoAddMenu(false);
+            setShowPhotoAddMenu(false); // 配置実行の選択肢が出るタイミングでは閉じる
           }}
           style={{
             display: 'flex', alignItems: 'center', gap: 10,
@@ -2326,7 +2367,12 @@ export default function App() {
     {photoStocks.some(s => s.length > 0) && (
       <button
         onPointerDown={e => e.stopPropagation()}
-        onClick={() => { if(window.confirm('すべてのストック写真を消去しますか？')) setPhotoStocks([[], [], []]); setShowPhotoAddMenu(false); }}
+        onClick={() => { 
+          if(window.confirm('すべてのストック写真を消去しますか？')) {
+            setPhotoStocks([[], [], []]); 
+            setShowPhotoAddMenu(false); 
+          }
+        }}
         style={{
           display: 'flex', alignItems: 'center', gap: 10,
           width: '100%', padding: '10px 16px',
@@ -2336,13 +2382,11 @@ export default function App() {
         }}
       >
         <span style={{ fontSize: 16, minWidth: 24 }}>🗑️</span>
-        <div>全ストックを消す（計{photoStocks.reduce((a, s) => a + s.length, 0)}枚）</div>
+        <div>全ストックを消す</div>
       </button>
     )}
   </div>
 )}
-
-
           </div>
           <button className={`tab-btn ${activeMainTab === 'stamp' ? 'active' : ''}`} onClick={() => handleTabToggle('stamp')}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -2908,7 +2952,7 @@ export default function App() {
                     background: '#3b4f7a', color: '#fff',
                     fontSize: 14, fontWeight: 700, cursor: 'pointer',
                   }}
-                >完了（ストック{activeStockIndex + 1}: {photoStock.length}枚）</button>
+                >　完了</button>
               </div>
             </div>
           </div>
