@@ -2260,7 +2260,7 @@ export default function App() {
       </div>
     </button>
 
-    {/* ストック管理ボタン（整理・削除ボタンを統合・文言変更） */}
+    {/* ストック管理ボタン（枚数表示を追加） */}
     <button
       onPointerDown={e => e.stopPropagation()}
       onClick={() => { setShowPhotoAddMenu(false); setStockDeleteSelected(new Set()); setShowStockOrganizer(true); }}
@@ -2277,6 +2277,9 @@ export default function App() {
       <div>
         <div>ストックを管理する</div>
         <div style={{ fontSize: 10, color: '#aaa', fontWeight: 400 }}>ストックの写真を追加・削除</div>
+        <div style={{ fontSize: 9, color: '#f26b9a', fontWeight: 400, marginTop: 2 }}>
+          {`ｽﾄｯｸ1：${photoStocks[0].length}枚、ｽﾄｯｸ2：${photoStocks[1].length}枚、ｽﾄｯｸ3：${photoStocks[2].length}枚`}
+        </div>
       </div>
     </button>
 
@@ -2319,7 +2322,7 @@ export default function App() {
       );
     })()}
 
-    {/* 全ストック消去（既存のまま） */}
+    {/* 全ストック消去 */}
     {photoStocks.some(s => s.length > 0) && (
       <button
         onPointerDown={e => e.stopPropagation()}
@@ -2338,6 +2341,8 @@ export default function App() {
     )}
   </div>
 )}
+
+
           </div>
           <button className={`tab-btn ${activeMainTab === 'stamp' ? 'active' : ''}`} onClick={() => handleTabToggle('stamp')}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
