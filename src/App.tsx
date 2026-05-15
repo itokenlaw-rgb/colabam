@@ -717,16 +717,23 @@ const BG_SERIES: BgSeries[] = [
     id: 's1',
     label: '水彩',
     files: Array.from({ length: 12 }, (_, i) => `/colabam_bimg${101 + i}.jpg`),
+'/colabam_bimg997.jpg',
   },
   {
     id: 's2',
     label: 'ポップ',
-    files: Array.from({ length: 12 }, (_, i) => `/colabam_bimg${201 + i}.jpg`),
+    files: [
+      ...Array.from({ length: 12 }, (_, i) => `/colabam_bimg${201 + i}.jpg`),
+      '/colabam_bimg999.jpg',
+    ],
   },
   {
     id: 's3',
     label: 'ｽﾀｲﾘｯｼｭ',
-    files: Array.from({ length: 12 }, (_, i) => `/colabam_bimg${301 + i}.jpg`),
+    files: [
+      ...Array.from({ length: 12 }, (_, i) => `/colabam_bimg${301 + i}.jpg`),
+      '/colabam_bimg998.jpg',
+    ],
   },
 ];
 
@@ -1146,7 +1153,15 @@ export default function App() {
     bgImage?: string;      // 背景画像URL（設定時はこちらが優先）
     bgPhotoOpacity?: number; // 写真背景の不透明度 0〜1
     bgPhotoUrl?: string;   // デバイス写真から選んだ背景URL
-  }>({ color: '#fffbe6', color2: '#f26b9a', pattern: 'none', patternType: 'solid', gradientDir: 'to bottom', bgImage: undefined, bgPhotoOpacity: 1, bgPhotoUrl: undefined });
+  }>(() => {
+
+// 997, 998, 999 の中からランダムに1つ選ぶ
+  const bgNumbers = [997, 998, 999];
+  const randomIndex = Math.floor(Math.random() * bgNumbers.length);
+  const initialBgImage = `/colabam_bimg${bgNumbers[randomIndex]}.jpg`;
+
+    return { color: '#fffbe6', color2: '#f26b9a', pattern: 'none', patternType: 'solid', gradientDir: 'to bottom', bgImage: initialBgImage, bgPhotoOpacity: 1, bgPhotoUrl: undefined };
+  });
   const [targetSlotId, setTargetSlotId] = useState<string | null>(null);
   const [cropImageUrl, setCropImageUrl] = useState<string | null>(null);
   const [cropInitialShape, setCropInitialShape] = useState<'square' | 'rectangle' | 'rectangle-h' | 'circle' | 'ellipse' | 'ellipse-h' | 'heart' | 'star' | undefined>(undefined);
@@ -1297,7 +1312,8 @@ export default function App() {
     pushHistory(items);
     setItems([]);
     setTemplateSlots([]);
-    setCanvasBg({ color: '#fffbe6', color2: '#f26b9a', pattern: 'none', patternType: 'solid', gradientDir: 'to bottom', bgImage: undefined, bgPhotoOpacity: 1, bgPhotoUrl: undefined });
+    const resetBgImage = new Date().getSeconds() % 2 === 0 ? '/colabam_bimg998.jpg' : '/colabam_bimg999.jpg';
+    setCanvasBg({ color: '#fffbe6', color2: '#f26b9a', pattern: 'none', patternType: 'solid', gradientDir: 'to bottom', bgImage: resetBgImage, bgPhotoOpacity: 1, bgPhotoUrl: undefined });
   };
 
   // アップロード時の元画像URLを一時保持するref（クロップ完了時にCanvasItemへ渡す）
