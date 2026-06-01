@@ -1601,8 +1601,9 @@ export default function App() {
     setShowFillModeDialog(true);
   };
 
-  // 実際に配置を行う（emptyOnly引数は残しつつ、常にこれまでの写真を削除して全スロットを埋めます）
-  const handleFillAllSlots = (stockIdx: 0 | 1 | 2, emptyOnly: boolean) => {
+// 実際に配置を行う
+  // 修正：これまでの枠内写真を削除し、すべての枠（全スロット）を埋めて空き枠をなくします（未使用引数 emptyOnly を除去）
+  const handleFillAllSlots = (stockIdx: 0 | 1 | 2) => {
     const photoStock = photoStocks[stockIdx];
     if (photoStock.length === 0) return;
 
@@ -3002,7 +3003,7 @@ export default function App() {
               </div>
               <div style={{ padding: '12px 16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <button
-                  onClick={() => handleFillAllSlots(pendingFillStockIdx, false)}
+onClick={() => handleFillAllSlots(pendingFillStockIdx)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 14, padding: '16px 18px', borderRadius: 12,
                     border: '1.5px solid #f26b9a88', background: '#f26b9a18', color: '#fff', cursor: 'pointer', textAlign: 'left'
