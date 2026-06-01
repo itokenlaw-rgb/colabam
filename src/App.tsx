@@ -1757,6 +1757,50 @@ const handleSlotPickFromStock = (_stockIdx: 0 | 1 | 2, stockPhotoUrl: string) =>
       return;
     }
 
+pushHistory(items);
+
+    // 1. これまでに枠に入っていた写真アイテム（type: 'photo'）をすべて削除する
+    //    (スタンプやテキストなど、photo 以外のアイテムは残します)
+    const baseItemsWithoutPhotos = items.filter(item => item.type !== 'photo');
+
+    // 2. 空き枠・既存枠に関わらず、すべてのテンプレートスロット（templateSlots）を対象にする
+    const targetSlots = templateSlots;
+
+    const newItems: CanvasItem[] = targetSlots.map((slot, i) => {
+      const imgUrl = shuffled[i % shuffled.length].url;
+      maxZIndex.current += 1;
+      const clipShape = slotStyleToClipShape(slot);
+      return {
+        id: `photo-slot-${slot.id}-${Date.now()}-${i}`,
+        type: 'photo' as ItemType,
+        content: imgUrl,
+        originalImageUrl: imgUrl,
+        x: slot.x,
+        y: slot.y,
+        width: slot.width,
+        height: slot.height,
+        rotation: slot.rotation ?? 0,
+        zIndex: maxZIndex.current,
+        clipShape,
+        ...(Object.keys(slotStyleToItemStyle(slot)).length > 0
+          ? { slotStyle: slotStyleToItemStyle(slot) }
+          : {}),
+      };
+    });
+
+    // 3. 写真を除外したベースのアイテムに、新しい写真アイテムを統合してセット
+    setItems([...baseItemsWithoutPhotos, ...newItems]);
+
+    // 4. すべての枠が埋まったため、空の枠（templateSlots）をすべて削除して非表示にする
+    setTemplateSlots([]);
+
+    // メニューやモーダルのクリーンアップ
+    setShowPhotoAddMenu(false);
+    setShowFillModeDialog(false);
+    setPendingFillStockIdx(null);
+  };
+
+
     // 空き枠の判定
     const filledSlotIds = new Set(
       items
