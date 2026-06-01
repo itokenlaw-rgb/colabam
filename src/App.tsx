@@ -1731,7 +1731,8 @@ const handleSlotPickFromStock = (_stockIdx: 0 | 1 | 2, stockPhotoUrl: string) =>
     }
   };
 
-  // 実際に配置を行う（emptyOnly=trueで空き枠のみ、falseで全枠置換）
+// 実際に配置を行う（emptyOnly=trueで空き枠のみ、falseで全枠置換）
+  // 修正：これまでの枠内写真を削除し、すべての枠（全スロット）を埋めて空き枠をなくします
   const handleFillAllSlots = (stockIdx: 0 | 1 | 2, emptyOnly: boolean) => {
     const photoStock = photoStocks[stockIdx];
     if (photoStock.length === 0) return;
@@ -1757,7 +1758,7 @@ const handleSlotPickFromStock = (_stockIdx: 0 | 1 | 2, stockPhotoUrl: string) =>
       return;
     }
 
-pushHistory(items);
+    pushHistory(items);
 
     // 1. これまでに枠に入っていた写真アイテム（type: 'photo'）をすべて削除する
     //    (スタンプやテキストなど、photo 以外のアイテムは残します)
@@ -1800,7 +1801,8 @@ pushHistory(items);
     setPendingFillStockIdx(null);
   };
 
-
+  const selectedIdRef = useRef<string | null>(null);
+  selectedIdRef.current = selectedId;
     // 空き枠の判定
     const filledSlotIds = new Set(
       items
