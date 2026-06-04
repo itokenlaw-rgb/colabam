@@ -1795,9 +1795,22 @@ const handleSlotPickFromStock = (_stockIdx: 0 | 1 | 2, stockPhotoUrl: string) =>
           : {}),
       };
     });
-    setItems(prev => [...prev, ...newItems]);
-    // 全枠置換の場合のみテンプレートスロットをクリア
-    if (!emptyOnly) setTemplateSlots([]);
+    // 全枠置換の場合：対象スロットに既存の写真があれば先に削除してから新しい写真を追加
+    if (!emptyOnly) {
+      const targetSlotIdSet = new Set(targetSlots.map(s => s.id));
+      setItems(prev => [
+        ...prev.filter(item => {
+          if (item.type !== 'photo') return true;
+          const m = item.id.match(/^photo-slot-(.+?)-\d+/);
+          if (!m) return true;
+          return !targetSlotIdSet.has(m[1]);
+        }),
+        ...newItems,
+      ]);
+      setTemplateSlots([]);
+    } else {
+      setItems(prev => [...prev, ...newItems]);
+    }
     setShowPhotoAddMenu(false);
     setShowFillModeDialog(false);
     setPendingFillStockIdx(null);
