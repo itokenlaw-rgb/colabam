@@ -3096,8 +3096,7 @@ justifyContent: 'center', // ← ここを追加して中央寄せにします
                     }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 5,
-                      marginLeft: 'auto', padding: '7px 12px', borderRadius: 8,
-marginLeft: '8px', // ← 左端に押し付ける 'auto' から固定幅の余白に変更
+                      marginLeft: '8px', padding: '7px 12px', borderRadius: 8,
                       border: 'none', background: 'rgba(220,60,60,0.85)',
                       color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0,
                     }}
