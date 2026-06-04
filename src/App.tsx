@@ -48,6 +48,7 @@ function extractExifDate(file: File): Promise<Date | null> {
               const tag = getU16(entryOffset);
               // 0x9003: DateTimeOriginal
               if (tag === 0x9003 || tag === 0x0132) {
+                // type は取得しなくてOK
                 const count = getU32(entryOffset + 4);
                 const valueOffset = count > 4
                   ? tiffStart + getU32(entryOffset + 8)
@@ -58,6 +59,7 @@ function extractExifDate(file: File): Promise<Date | null> {
                   if (ch === 0) break;
                   dateStr += String.fromCharCode(ch);
                 }
+                // "2024:03:15 14:30:00" → Date
                 const m = dateStr.match(/^(\d{4}):(\d{2}):(\d{2})/);
                 if (m) {
                   resolve(new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3])));
@@ -75,6 +77,7 @@ function extractExifDate(file: File): Promise<Date | null> {
       } catch { resolve(null); }
     };
     reader.onerror = () => resolve(null);
+    // 最初の64KBだけ読めばExifは十分
     reader.readAsArrayBuffer(file.slice(0, 65536));
   });
 }
@@ -115,6 +118,7 @@ interface TemplateData {
 
 type ClipShape = 'heart' | 'star' | 'bubble';
 
+// ===== Text Style Types =====
 type TextStyleId =
   | 'normal'
   | 'shadow'
@@ -129,7 +133,7 @@ type TextStyleId =
 interface TextStyleDef {
   id: TextStyleId;
   label: string;
-  preview: string;
+  preview: string; // preview CSS style string (textShadow / WebkitTextStroke etc.)
 }
 
 const TEXT_STYLES: TextStyleDef[] = [
@@ -143,16 +147,15 @@ const TEXT_STYLES: TextStyleDef[] = [
   { id: 'arch-down',      label: 'アーチ↓',  preview: '' },
   { id: 'wave',           label: 'ウェーブ', preview: '' },
 ];
-
 const FONT_FAMILIES = [
   { name: 'sans-serif', label: 'ゴシック' },
   { name: 'serif', label: '明朝体' },
-  { name: '"M PLUS Rounded 1c", sans-serif', label: '丸ゴシック' },
+  { name: '"M PLUS Rounded 1c", sans-serif', label: '丸ゴシック' }, // Webフォント等がある場合
   { name: '"Permanent Marker", cursive', label: '手書き風' },
 ];
 
 function getTextCssStyle(styleId: TextStyleId | undefined, color: string, fontFamily: string): React.CSSProperties {
-  const base: React.CSSProperties = { color, fontFamily };
+  const base: React.CSSProperties = { color, fontFamily }; // ← fontFamily を追加
   switch (styleId) {
     case 'shadow':
       return { ...base, textShadow: '2px 3px 6px rgba(0,0,0,0.55)' };
@@ -171,9 +174,11 @@ function getTextCssStyle(styleId: TextStyleId | undefined, color: string, fontFa
   }
 }
 
-function ArchText({ text, color, fontSize, styleId, width, height, fontFamily }: {
-  text: string; color: string; fontSize: number; styleId: TextStyleId; width: number; height: number; fontFamily: string;
+// アーチ/ウェーブはSVGで描画
+function ArchText({ text, color, fontSize, styleId, width, height, fontFamily }: { // ← fontFamily を追加
+text: string; color: string; fontSize: number; styleId: TextStyleId; width: number; height: number; fontFamily: string; // ← 型も追加
 }) {
+
   const id = `arch-${Math.random().toString(36).slice(2)}`;
   const r = width * 0.9;
   const cx = width / 2;
@@ -211,6 +216,7 @@ function ArchText({ text, color, fontSize, styleId, width, height, fontFamily }:
     );
   }
 
+  // arch-up / arch-down
   const sweep = isUp ? 1 : 0;
   const arcY = isUp ? height * 0.85 : height * 0.15;
   const pathD = `M ${cx - r / 2} ${arcY} A ${r} ${r} 0 0 ${sweep} ${cx + r / 2} ${arcY}`;
@@ -241,7 +247,7 @@ interface CanvasItem {
   id: string;
   type: ItemType;
   content?: string;
-  originalImageUrl?: string;
+  originalImageUrl?: string; // トリミング前の元画像URL
   x: number;
   y: number;
   width: number;
@@ -253,13 +259,17 @@ interface CanvasItem {
   clipShape?: ClipShape;
   textStyle?: TextStyleId;
   fontFamily?: string;
-  slotStyle?: React.CSSProperties;
+  slotStyle?: React.CSSProperties; // 枠から引き継いだborderRadius/clipPath
 }
 
+// 3:4 キャンバスサイズ（表示用px）
 const CANVAS_W = 360;
 const CANVAS_H = 480;
+
+// 保存時の実解像度
 const EXPORT_W = 1080;
 
+// ===== Template Definitions =====
 const TEMPLATES: TemplateData[] = [
   {
     id: 'four',
@@ -277,9 +287,11 @@ const TEMPLATES: TemplateData[] = [
     id: 'circle',
     name: 'サークル６',
     slots: [
+      // 上段：左に中円、右に小円×2
       { id: 's1', x: 15,  y: 65,  width: 155, height: 155, style: { borderRadius: '50%' } },
       { id: 's2', x: 210, y: 60,  width: 110, height: 110, style: { borderRadius: '50%' } },
       { id: 's3', x: 225, y: 180, width: 95,  height: 95,  style: { borderRadius: '50%' } },
+      // 下段：左に小円×2、右に中円
       { id: 's4', x: 45,  y: 235, width: 90,  height: 90,  style: { borderRadius: '50%' } },
       { id: 's5', x: 30,  y: 340, width: 105, height: 105, style: { borderRadius: '50%' } },
       { id: 's6', x: 175, y: 300, width: 165, height: 165, style: { borderRadius: '50%' } },
@@ -287,11 +299,13 @@ const TEMPLATES: TemplateData[] = [
   },
 ];
 
+// ===== カスタム枠の種類定義 =====
 type CustomSlotShape = 'square' | 'rect-v' | 'rect-h' | 'circle' | 'ellipse-v' | 'ellipse-h' | 'heart' | 'star';
 
 interface CustomSlotOption {
   shape: CustomSlotShape;
   label: string;
+  // サムネイル用の表示スタイル
   thumbStyle: React.CSSProperties;
 }
 
@@ -306,21 +320,24 @@ const CUSTOM_SLOT_OPTIONS: CustomSlotOption[] = [
   { shape: 'star',      label: '星',       thumbStyle: { width: 36, height: 36, clipPath: 'polygon(50% 0%, 61.8% 35.4%, 98.1% 34.5%, 69.1% 57.3%, 79.4% 90.5%, 50% 70%, 20.6% 90.5%, 30.9% 57.3%, 1.9% 34.5%, 38.2% 35.4%)' } },
 ];
 
+// 6マスの配置（左上→右上→中左→中右→下左→下右）
+// shape ごとのサイズ比率（CANVAS_W=360, CANVAS_H=480 を基準）
 function buildCustomSlots(shapes: CustomSlotShape[]): SlotData[] {
-  const PAD = 8;
-  const GAP = 6;
-  const TOP_OFFSET = 52;
+  const PAD = 8;      // 外側余白
+  const GAP = 6;      // 枠間隔
+  const TOP_OFFSET = 52; // 上部タイトルスペース
   const colW = (CANVAS_W - PAD * 2 - GAP) / 2;
   const availH = CANVAS_H - TOP_OFFSET - PAD - GAP * 2;
   const rowH = availH / 3;
 
+  // 6マスのグリッド座標（col 0=左, 1=右  / row 0=上, 1=中, 2=下）
   const grid = [
-    { col: 0, row: 0 },
-    { col: 1, row: 0 },
-    { col: 0, row: 1 },
-    { col: 1, row: 1 },
-    { col: 0, row: 2 },
-    { col: 1, row: 2 },
+    { col: 0, row: 0 }, // 1: 左上
+    { col: 1, row: 0 }, // 2: 右上
+    { col: 0, row: 1 }, // 3: 中左
+    { col: 1, row: 1 }, // 4: 中右
+    { col: 0, row: 2 }, // 5: 下左
+    { col: 1, row: 2 }, // 6: 下右
   ];
 
   return shapes.map((shape, i) => {
@@ -328,6 +345,7 @@ function buildCustomSlots(shapes: CustomSlotShape[]): SlotData[] {
     const cx = PAD + col * (colW + GAP);
     const cy = TOP_OFFSET + row * (rowH + GAP);
 
+    // セル内に収めるサイズ（形状ごとにアスペクト比を変える）
     let w = colW, h = rowH;
     if (shape === 'square') {
       const s = Math.min(colW, rowH);
@@ -376,10 +394,12 @@ function buildCustomSlots(shapes: CustomSlotShape[]): SlotData[] {
   });
 }
 
+// ===== ランダム枠生成 =====
 type RandomShape = 'square' | 'rect-v' | 'rect-h' | 'circle' | 'ellipse-v' | 'ellipse-h' | 'heart' | 'star';
 
 function buildRandomSlots(): SlotData[] {
   const shapes: RandomShape[] = ['square', 'rect-v', 'rect-h', 'circle', 'ellipse-v', 'ellipse-h', 'heart', 'star'];
+  // 6つランダムに選ぶ（重複あり）
   const picked: RandomShape[] = Array.from({ length: 6 }, () => shapes[Math.floor(Math.random() * shapes.length)]);
 
   const PAD = 8;
@@ -422,8 +442,10 @@ function buildRandomSlots(): SlotData[] {
     if (shape === 'circle' || shape === 'ellipse-v' || shape === 'ellipse-h') {
       slotStyle = { borderRadius: '50%' };
     } else if (shape === 'heart') {
+      // 修正後：カスタム配置と同じ高精度なハートの形
       slotStyle = { clipPath: 'polygon(50% 25%, 60% 10%, 75% 5%, 90% 10%, 100% 25%, 100% 42%, 85% 60%, 65% 78%, 50% 100%, 35% 78%, 15% 60%, 0% 42%, 0% 25%, 10% 10%, 25% 5%, 40% 10%)' };
     } else if (shape === 'star') {
+      // 修正後：カスタム配置と同じ高精度な星の形
       slotStyle = { clipPath: 'polygon(50% 0%, 61.8% 35.4%, 98.1% 34.5%, 69.1% 57.3%, 79.4% 90.5%, 50% 70%, 20.6% 90.5%, 30.9% 57.3%, 1.9% 34.5%, 38.2% 35.4%)' };
     }
 
@@ -438,8 +460,11 @@ function buildRandomSlots(): SlotData[] {
   });
 }
 
+// ===== Canvas上のclip-path CSS生成 =====
+// CropModalのgetCroppedImgと同じ形状をCSS clip-pathで再現
 function getClipPathStyle(shape: ClipShape): React.CSSProperties {
   if (shape === 'heart') {
+    // CropModalのbezierCurveToと同じ形状をpolygon近似で表現
     return {
       clipPath: 'polygon(50% 25%, 60% 10%, 75% 5%, 90% 10%, 100% 25%, 100% 42%, 85% 60%, 65% 78%, 50% 100%, 35% 78%, 15% 60%, 0% 42%, 0% 25%, 10% 10%, 25% 5%, 40% 10%)',
     };
@@ -462,7 +487,11 @@ function PreviewModal({ dataUrl, onClose }: { dataUrl: string; onClose: () => vo
     <div className="preview-overlay" onClick={onClose}>
       <div className="preview-modal" onClick={e => e.stopPropagation()}>
         <div style={{ marginBottom: '10px', fontWeight: 'bold', color: '#fff' }}>完成画像</div>
+        
+        {/* 画像本体 */}
         <img src={dataUrl} alt="preview" className="preview-img" style={{ maxWidth: '100%', maxHeight: '60vh', borderRadius: '8px' }} />
+        
+        {/* iPhoneユーザー向けの案内メッセージ */}
         <div style={{ 
           color: '#eee', 
           fontSize: '13px', 
@@ -477,6 +506,7 @@ function PreviewModal({ dataUrl, onClose }: { dataUrl: string; onClose: () => vo
           <strong>「"写真"に追加」</strong>を選択すると<br />
           カメラロールに保存されます。
         </div>
+
         <div className="preview-actions" style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'center' }}>
           <button className="preview-btn close" onClick={onClose} style={{ padding: '10px 20px', borderRadius: '20px', border: 'none', cursor: 'pointer' }}>
             閉じる
@@ -487,6 +517,7 @@ function PreviewModal({ dataUrl, onClose }: { dataUrl: string; onClose: () => vo
   );
 }
 
+// ===== Rotate Handle =====
 interface RotateHandleProps {
   itemId: string;
   itemX: number;
@@ -500,7 +531,7 @@ interface RotateHandleProps {
 
 function RotateHandle({ itemId, itemX, itemY, itemW, itemH, rotation, onRotate, position = 'bottomRight' }: RotateHandleProps) {
   const isDragging = useRef(false);
-  const startAngleOffset = useRef(0);
+  const startAngleOffset = useRef(0); // 開始時の角度差分を保存
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     e.stopPropagation();
@@ -508,6 +539,7 @@ function RotateHandle({ itemId, itemX, itemY, itemW, itemH, rotation, onRotate, 
     isDragging.current = true;
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
 
+    // 1. ハンドルを掴んだ瞬間のマウスの角度を計算
     const handle = e.target as HTMLElement;
     const canvas = handle.closest('.album-canvas') as HTMLElement;
     if (!canvas) return;
@@ -519,13 +551,17 @@ function RotateHandle({ itemId, itemX, itemY, itemW, itemH, rotation, onRotate, 
     const dy = e.clientY - cy;
     const clickAngle = Math.atan2(dy, dx) * (180 / Math.PI);
     
+    // 2. 現在のアイテムの回転角との「差」を保存しておく
     startAngleOffset.current = clickAngle - rotation;
 
     const onMove = (moveEvent: PointerEvent) => {
       if (!isDragging.current) return;
+
       const mdx = moveEvent.clientX - cx;
       const mdy = moveEvent.clientY - cy;
       const currentMouseAngle = Math.atan2(mdy, mdx) * (180 / Math.PI);
+      
+      // 3. マウスの移動角度から初期の差分を引くことで、スムーズに回転を開始させる
       const newAngle = currentMouseAngle - startAngleOffset.current;
       onRotate(itemId, Math.round(newAngle));
     };
@@ -554,15 +590,16 @@ function RotateHandle({ itemId, itemX, itemY, itemW, itemH, rotation, onRotate, 
   );
 }
 
+// ===== Background helpers =====
 type BgState = {
   color: string;
   color2: string;
   pattern: string;
   patternType: string;
   gradientDir: string;
-  bgImage?: string;
-  bgPhotoOpacity?: number;
-  bgPhotoUrl?: string;
+  bgImage?: string; // 背景画像URL（設定時はこちらが優先）
+  bgPhotoOpacity?: number; // 写真背景の不透明度 0〜1（1=そのまま, 0=白）
+  bgPhotoUrl?: string; // デバイス写真から選んだ背景URL
 };
 
 function getCanvasBgStyle(bg: BgState): React.CSSProperties {
@@ -587,6 +624,7 @@ function getCanvasBgStyle(bg: BgState): React.CSSProperties {
   return { backgroundColor: bg.color };
 }
 
+// SVGパターンをキャンバス全面に重ねるコンポーネント
 function BgPatternSvg({ patternType, color, color2, width, height }: {
   patternType: string; color: string; color2: string; width: number; height: number;
 }) {
@@ -656,6 +694,7 @@ function BgPatternSvg({ patternType, color, color2, width, height }: {
   );
 }
 
+// ===== 背景パターン定義 =====
 const PATTERN_DEFS = [
   { id: 'solid',    label: '無地',   icon: '■' },
   { id: 'checker',  label: '格子',   icon: '⊞' },
@@ -682,6 +721,7 @@ const PRESET_COLORS = [
   '#bbbbbb', '#000000',
 ];
 
+// ===== 背景画像リスト =====
 interface BgSeries {
   id: string;
   label: string;
@@ -715,6 +755,7 @@ const BG_SERIES: BgSeries[] = [
   },
 ];
 
+// ===== スタンプ画像定義 =====
 type StampCategory = 'with-bg' | 'no-bg';
 
 interface StampCategoryDef {
@@ -746,12 +787,14 @@ const STAMP_FILES: Record<StampCategory, string[]> = {
   ],
 };
 
+// ===== スタンプメニューコンポーネント =====
 function StampMenu({ onAdd }: { onAdd: (url: string) => void }) {
   const [activeCategory, setActiveCategory] = useState<StampCategory>('no-bg');
   const files = STAMP_FILES[activeCategory];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, height: '100%' }}>
+      {/* カテゴリータブ */}
       <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
         {STAMP_CATEGORIES.map(cat => (
           <button
@@ -769,6 +812,7 @@ function StampMenu({ onAdd }: { onAdd: (url: string) => void }) {
         ))}
       </div>
 
+      {/* スタンプ画像グリッド */}
       {files.length === 0 ? (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, color: '#aaa', fontSize: 12 }}>
           画像を追加してください<br />
@@ -802,6 +846,7 @@ function StampMenu({ onAdd }: { onAdd: (url: string) => void }) {
   );
 }
 
+// ===== 背景画像タブ（シリーズ切替） =====
 function ImageBgTab({ canvasBg, setCanvasBg }: {
   canvasBg: BgState;
   setCanvasBg: React.Dispatch<React.SetStateAction<BgState>>;
@@ -811,7 +856,9 @@ function ImageBgTab({ canvasBg, setCanvasBg }: {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minHeight: 0 }}>
+      {/* シリーズ切替タブ */}
       <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+        {/* 画像なしボタン */}
         <button
           onClick={() => setCanvasBg(prev => ({ ...prev, bgImage: undefined }))}
           style={{
@@ -821,6 +868,7 @@ function ImageBgTab({ canvasBg, setCanvasBg }: {
             fontWeight: !canvasBg.bgImage ? 'bold' : 'normal', whiteSpace: 'nowrap', flexShrink: 0,
           }}
         >✕ なし</button>
+        {/* シリーズタブ */}
         {BG_SERIES.map(s => (
           <button
             key={s.id}
@@ -836,6 +884,7 @@ function ImageBgTab({ canvasBg, setCanvasBg }: {
           >{s.label}</button>
         ))}
       </div>
+      {/* サムネイル横スクロール */}
       <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
         {series.files.map((src, i) => (
           <button
@@ -891,6 +940,7 @@ function BgMenu({ canvasBg, setCanvasBg }: {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {/* タブ切替：背景画像 / カラー / 写真から選ぶ */}
       <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
         <button
           onClick={() => setBgTab('image')}
@@ -917,6 +967,7 @@ function BgMenu({ canvasBg, setCanvasBg }: {
 
       {bgTab === 'color' && (
         <>
+          {/* パターン選択 */}
           <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2, flexShrink: 0, justifyContent: 'center' }}>
             {PATTERN_DEFS.map(p => (
               <button
@@ -935,6 +986,7 @@ function BgMenu({ canvasBg, setCanvasBg }: {
             ))}
           </div>
 
+          {/* グラデーション方向 */}
           {canvasBg.patternType === 'gradient' && (
             <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexShrink: 0 }}>
               <span style={{ fontSize: 10, color: '#888', whiteSpace: 'nowrap' }}>方向:</span>
@@ -952,6 +1004,7 @@ function BgMenu({ canvasBg, setCanvasBg }: {
             </div>
           )}
 
+          {/* カラーターゲット切替（無地以外） */}
           {needsColor2 && (
             <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexShrink: 0 }}>
               <button
@@ -979,6 +1032,7 @@ function BgMenu({ canvasBg, setCanvasBg }: {
             </div>
           )}
 
+          {/* カラーパレット */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(13, 24px)', gap: 5, flexShrink: 0, justifyContent: 'center' }}>
             {PRESET_COLORS.map(c => (
               <button
@@ -993,6 +1047,7 @@ function BgMenu({ canvasBg, setCanvasBg }: {
                 }}
               />
             ))}
+            {/* カスタム色入力 */}
             <label style={{ width: 24, height: 24, borderRadius: 4, border: '2px solid #ccc', overflow: 'hidden', cursor: 'pointer', flexShrink: 0 }}>
               <input type="color" value={currentColor} onChange={e => setColor(e.target.value)}
                 style={{ width: 30, height: 30, border: 'none', padding: 0, marginTop: -3, marginLeft: -3, cursor: 'pointer' }} />
@@ -1007,6 +1062,7 @@ function BgMenu({ canvasBg, setCanvasBg }: {
 
       {bgTab === 'photo' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {/* 写真選択ボタン */}
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button
               onClick={() => photoInputRef.current?.click()}
@@ -1031,6 +1087,7 @@ function BgMenu({ canvasBg, setCanvasBg }: {
             )}
           </div>
 
+          {/* プレビューサムネイル */}
           {canvasBg.bgPhotoUrl && (
             <div style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid #eee', height: 60, position: 'relative', flexShrink: 0 }}>
               <img
@@ -1046,6 +1103,7 @@ function BgMenu({ canvasBg, setCanvasBg }: {
             </div>
           )}
 
+          {/* 薄さ調整スライダー */}
           {canvasBg.bgPhotoUrl && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1094,6 +1152,7 @@ function BgMenu({ canvasBg, setCanvasBg }: {
 
 // ===== Main App =====
 export default function App() {
+  // iPhoneのinputフォーカス時の自動ズームを防ぐ
   useEffect(() => {
     const setViewport = (content: string) => {
       let viewport = document.querySelector('meta[name="viewport"]');
@@ -1117,16 +1176,16 @@ export default function App() {
   const [history, setHistory] = useState<CanvasItem[][]>([]);
   const [templateSlots, setTemplateSlots] = useState<SlotData[]>([]);
   const [activeMainTab, setActiveMainTab] = useState<MainTab | null>(null);
-
+  
   const [canvasBg, setCanvasBg] = useState<{
     color: string;
-    color2: string;
-    pattern: string;
-    patternType: string;
-    gradientDir: string;
-    bgImage?: string;
-    bgPhotoOpacity?: number;
-    bgPhotoUrl?: string;
+    color2: string;        // セカンダリカラー
+    pattern: string;       // legacy
+    patternType: string;   // 新しいパターン種別
+    gradientDir: string;   // グラデーション方向
+    bgImage?: string;      // 背景画像URL
+    bgPhotoOpacity?: number; // 写真背景の不透明度
+    bgPhotoUrl?: string;   // デバイス写真から選んだ背景URL
   }>(() => {
     const randomBgImages = ['/colabam_bimg997.jpg', '/colabam_bimg998.jpg', '/colabam_bimg999.jpg'];
     const initialBgImage = randomBgImages[Math.floor(Math.random() * randomBgImages.length)];
@@ -1147,27 +1206,39 @@ export default function App() {
   const [textStyle, setTextStyle] = useState<TextStyleId>('normal');
   const [fontFamily, setFontFamily] = useState('sans-serif');
 
+  // 写真サブメニュー用state
   const [photoSubMenuId, setPhotoSubMenuId] = useState<string | null>(null);
   const [photoSubMenuPos, setPhotoSubMenuPos] = useState<{ x: number; y: number } | null>(null);
   const [replaceTargetId, setReplaceTargetId] = useState<string | null>(null);
   const [retrimTargetId, setRetrimTargetId] = useState<string | null>(null);
 
+  // スタンプ・テキストサブメニュー用state
   const [itemSubMenuId, setItemSubMenuId] = useState<string | null>(null);
   const [itemSubMenuPos, setItemSubMenuPos] = useState<{ x: number; y: number } | null>(null);
 
+  // 写真ストック（3つのストック）
   const [photoStocks, setPhotoStocks] = useState<StockPhoto[][]>([[], [], []]);
   const [activeStockIndex, setActiveStockIndex] = useState<0 | 1 | 2>(0);
   const [showPhotoAddMenu, setShowPhotoAddMenu] = useState(false);
+  
+  // ストック整理モーダル
   const [showStockOrganizer, setShowStockOrganizer] = useState(false);
   const [stockDeleteSelected, setStockDeleteSelected] = useState<Set<number>>(new Set());
+  
+  // 日付フィルタ確認モーダル
   const [pendingStockPhotos, setPendingStockPhotos] = useState<StockPhoto[]>([]);
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [dateFilterFrom, setDateFilterFrom] = useState('');
   const [dateFilterTo, setDateFilterTo] = useState('');
+  
+  // ストック選択ポップアップ（ランダム配置用）
   const [showFillStockPicker, setShowFillStockPicker] = useState(false);
+  
+  // ランダム配置モード確認ダイアログ
   const [showFillModeDialog, setShowFillModeDialog] = useState(false);
   const [pendingFillStockIdx, setPendingFillStockIdx] = useState<0 | 1 | 2 | null>(null);
 
+  // 枠クリック時の写真選択元メニュー
   const [showSlotPickerMenu, setShowSlotPickerMenu] = useState(false);
   const [slotPickerTargetId, setSlotPickerTargetId] = useState<string | null>(null);
 
@@ -1193,7 +1264,7 @@ export default function App() {
     const w = extra?.width ?? defaultW;
     const h = extra?.height ?? defaultH;
 
-    const STAGGER_STEP = 30;
+    const STAGGER_STEP = 30; // ずらす量(px)
     const BASE_Y_STAMP = Math.round(CANVAS_H * 0.12);
 
     let defaultX = 50;
@@ -1589,80 +1660,138 @@ export default function App() {
     return result;
   };
 
+  // 枠を全部埋める（ストックからランダム）
   const handleFillStockSelected = (stockIdx: 0 | 1 | 2) => {
     const photoStock = photoStocks[stockIdx];
     if (photoStock.length === 0) {
       alert(`ストック${stockIdx + 1}に写真がありません。先に写真を追加してください。`);
       return;
     }
-    
+    // 空き枠があるかチェック
+    const filledSlotIds = new Set(
+      items
+        .filter(item => item.type === 'photo')
+        .map(item => {
+          const m = item.id.match(/^photo-slot-(.+?)-\d+/);
+          return m ? m[1] : null;
+        })
+        .filter(Boolean)
+    );
+    const hasEmptySlot = templateSlots.some(slot => !filledSlotIds.has(slot.id));
+
     setPendingFillStockIdx(stockIdx);
     setShowFillStockPicker(false);
-    setShowFillModeDialog(true);
+
+    if (hasEmptySlot) {
+      // 空き枠があるとき：モード選択ダイアログを表示
+      setShowFillModeDialog(true);
+    } else {
+      // 空き枠がないとき：すべての写真や写真枠を削除する確認アラートを表示
+      if (window.confirm("あいている枠がありません。これまでに配置した写真や写真枠をすべて削除し、新しくランダムに配置し直しますか？")) {
+        handleFillAllSlots(stockIdx, false);
+      } else {
+        setPendingFillStockIdx(null);
+      }
+    }
   };
 
-// 実際に配置を行う
-  // 修正：これまでの枠内写真を削除し、すべての枠（全スロット）を埋めて空き枠をなくします（未使用引数 emptyOnly を除去）
-  const handleFillAllSlots = (stockIdx: 0 | 1 | 2) => {
+  // 実際に配置を行う（emptyOnly=trueで空き枠のみ、falseで全枠置換＆不要枠削除）
+  const handleFillAllSlots = (stockIdx: 0 | 1 | 2, emptyOnly: boolean) => {
     const photoStock = photoStocks[stockIdx];
     if (photoStock.length === 0) return;
 
     const shuffled = [...photoStock].sort(() => Math.random() - 0.5);
 
-    // 写真枠（templateSlots）がない場合 → キャンバス上の既存 photo items を差し替え
-    if (templateSlots.length === 0) {
-      const photoItems = items.filter(item => item.type === 'photo');
-      if (photoItems.length === 0) return;
-      pushHistory(items);
-      setItems(prev =>
-        prev.map(item => {
-          if (item.type !== 'photo') return item;
-          const idx = photoItems.indexOf(item);
-          const imgUrl = shuffled[idx % shuffled.length].url;
-          return { ...item, content: imgUrl, originalImageUrl: imgUrl };
-        })
-      );
-      setShowPhotoAddMenu(false);
-      setShowFillModeDialog(false);
-      setPendingFillStockIdx(null);
-      return;
-    }
+    if (templateSlots.length === 0 && !items.some(item => item.type === 'photo')) return;
 
     pushHistory(items);
 
-    // 1. これまでに枠に入っていた写真アイテム（type: 'photo'）をすべて削除する
-    const baseItemsWithoutPhotos = items.filter(item => item.type !== 'photo');
+    const nonPhotoItems = items.filter(item => item.type !== 'photo');
 
-    // 2. 空き枠・既存枠に関わらず、すべてのテンプレートスロット（templateSlots）を対象にする
-    const targetSlots = templateSlots;
+    if (!emptyOnly) {
+      // 【あいている枠がない（全置換・一新）モード】
+      // 既存の写真枠（templateSlots）および現在のphotoアイテム情報を集約して全置換対象とする
+      let baseSlots = [...templateSlots];
+      if (baseSlots.length === 0) {
+        items.filter(item => item.type === 'photo').forEach((item, i) => {
+          const slotId = item.id.match(/^photo-slot-(.+?)-\d+/) ? item.id.match(/^photo-slot-(.+?)-\d+/)?.[1] : `rs${i+1}`;
+          baseSlots.push({
+            id: slotId || `slot-${i}`,
+            x: item.x,
+            y: item.y,
+            width: item.width,
+            height: item.height,
+            rotation: item.rotation,
+            style: item.slotStyle
+          });
+        });
+      }
 
-    const newItems: CanvasItem[] = targetSlots.map((slot, i) => {
-      const imgUrl = shuffled[i % shuffled.length].url;
-      maxZIndex.current += 1;
-      const clipShape = slotStyleToClipShape(slot);
-      return {
-        id: `photo-slot-${slot.id}-${Date.now()}-${i}`,
-        type: 'photo' as ItemType,
-        content: imgUrl,
-        originalImageUrl: imgUrl,
-        x: slot.x,
-        y: slot.y,
-        width: slot.width,
-        height: slot.height,
-        rotation: slot.rotation ?? 0,
-        zIndex: maxZIndex.current,
-        clipShape,
-        ...(Object.keys(slotStyleToItemStyle(slot)).length > 0
-          ? { slotStyle: slotStyleToItemStyle(slot) }
-          : {}),
-      };
-    });
+      const newItems: CanvasItem[] = baseSlots.map((slot, i) => {
+        const imgUrl = shuffled[i % shuffled.length].url;
+        maxZIndex.current += 1;
+        const clipShape = slotStyleToClipShape(slot);
+        return {
+          id: `photo-slot-${slot.id}-${Date.now()}-${i}`,
+          type: 'photo' as ItemType,
+          content: imgUrl,
+          originalImageUrl: imgUrl,
+          x: slot.x,
+          y: slot.y,
+          width: slot.width,
+          height: slot.height,
+          rotation: slot.rotation ?? 0,
+          zIndex: maxZIndex.current,
+          clipShape,
+          ...(Object.keys(slotStyleToItemStyle(slot)).length > 0
+            ? { slotStyle: slotStyleToItemStyle(slot) }
+            : {}),
+        };
+      });
 
-    // 3. 写真を除外したベースのアイテムに、新しい写真アイテムを統合してセット
-    setItems([...baseItemsWithoutPhotos, ...newItems]);
+      setItems([...nonPhotoItems, ...newItems]);
+      setTemplateSlots([]); // 全写真枠が新しく埋め尽くされるため、空の写真枠リストは完全に空にする
+      
+    } else {
+      // 【あいている枠に入れるモード】（既存の写真や枠はそのまま維持）
+      const filledSlotIds = new Set(
+        items
+          .filter(item => item.type === 'photo')
+          .map(item => {
+            const m = item.id.match(/^photo-slot-(.+?)-\d+/);
+            return m ? m[1] : null;
+          })
+          .filter(Boolean)
+      );
+      const targetSlots = templateSlots.filter(slot => !filledSlotIds.has(slot.id));
 
-    // 4. すべての枠が埋まったため、空の枠（templateSlots）をすべて削除して非表示にする
-    setTemplateSlots([]);
+      if (targetSlots.length === 0) return;
+
+      const newItems: CanvasItem[] = targetSlots.map((slot, i) => {
+        const imgUrl = shuffled[i % shuffled.length].url;
+        maxZIndex.current += 1;
+        const clipShape = slotStyleToClipShape(slot);
+        return {
+          id: `photo-slot-${slot.id}-${Date.now()}-${i}`,
+          type: 'photo' as ItemType,
+          content: imgUrl,
+          originalImageUrl: imgUrl,
+          x: slot.x,
+          y: slot.y,
+          width: slot.width,
+          height: slot.height,
+          rotation: slot.rotation ?? 0,
+          zIndex: maxZIndex.current,
+          clipShape,
+          ...(Object.keys(slotStyleToItemStyle(slot)).length > 0
+            ? { slotStyle: slotStyleToItemStyle(slot) }
+            : {}),
+        };
+      });
+
+      setItems(prev => [...prev, ...newItems]);
+      setTemplateSlots(prev => prev.filter(slot => !targetSlots.some(ts => ts.id === slot.id)));
+    }
 
     setShowPhotoAddMenu(false);
     setShowFillModeDialog(false);
@@ -1981,6 +2110,7 @@ export default function App() {
           className="album-canvas"
           style={{ width: CANVAS_W, height: CANVAS_H, ...getCanvasBgStyle(canvasBg) }}
         >
+          {/* 写真背景の薄さオーバーレイ */}
           {canvasBg.bgPhotoUrl && (canvasBg.bgPhotoOpacity ?? 1) < 1 && (
             <div style={{
               position: 'absolute', inset: 0,
@@ -1989,6 +2119,7 @@ export default function App() {
               zIndex: 0,
             }} />
           )}
+          {/* SVGパターンオーバーレイ（格子・水玉・ストライプ・星） */}
           {!canvasBg.bgImage && canvasBg.patternType !== 'solid' && canvasBg.patternType !== 'gradient' && (
             <BgPatternSvg patternType={canvasBg.patternType} color={canvasBg.color} color2={canvasBg.color2} width={CANVAS_W} height={CANVAS_H} />
           )}
@@ -2115,6 +2246,11 @@ export default function App() {
                         setItemSubMenuId(item.id);
                         setItemSubMenuPos(getMenuPos());
                       }
+                    } else {
+                      setPhotoSubMenuId(null);
+                      setPhotoSubMenuPos(null);
+                      setItemSubMenuId(null);
+                      setItemSubMenuPos(null);
                     }
                   }}
                   onClick={(e) => { e.stopPropagation(); }}
@@ -2202,6 +2338,7 @@ export default function App() {
         </div>
       </main>
 
+      {/* 写真サブメニュー */}
       {photoSubMenuId && photoSubMenuPos && (() => {
         const subItem = items.find(i => i.id === photoSubMenuId);
         if (!subItem) return null;
@@ -2250,6 +2387,7 @@ export default function App() {
         );
       })()}
 
+      {/* スタンプ・テキストサブメニュー */}
       {itemSubMenuId && itemSubMenuPos && (() => {
         const subItem = items.find(i => i.id === itemSubMenuId);
         if (!subItem) return null;
@@ -2463,6 +2601,7 @@ export default function App() {
         });
       }} style={{ display: 'none' }} />
 
+      {/* ===== 日付フィルタモーダル ===== */}
       {showDateFilter && (() => {
         const from = dateFilterFrom ? new Date(dateFilterFrom) : null;
         const to = dateFilterTo ? new Date(dateFilterTo + 'T23:59:59') : null;
@@ -2559,7 +2698,7 @@ export default function App() {
                 )}
 
                 <div style={{ padding: '10px 16px' }}>
-                  <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>22 期間を指定</div>
+                  <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>📆 期間を指定</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 10, color: '#aaa', marginBottom: 3 }}>開始日</div>
@@ -2664,6 +2803,7 @@ export default function App() {
         );
       })()}
 
+      {/* ===== ストック整理モーダル（3ストック対応） ===== */}
       {showStockOrganizer && (() => {
         const photoStock = photoStocks[activeStockIndex];
         const stockColors: string[] = ['#f26b9a', '#4caf7d', '#5b9bd5'];
@@ -2686,7 +2826,7 @@ export default function App() {
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 10px', borderBottom: '1px solid rgba(255,255,255,0.1)', flexShrink: 0 }}>
                 <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>ストックを整理する</span>
-                <button onClick={() => setShowStockOrganizer(false)} style={{ background: 'none', border: 'none', color: '#aaa', fontSize: 20, cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}>✕</button>
+                <button onClick={() => setShowStockOrganizer(false)} style={{ background: 'none', border: 'none', color: '#aaa', fontSize: 20, cursor: 'pointer', padding: '0 4px', lineHeight: 1 }} >✕</button>
               </div>
 
               <div style={{ display: 'flex', gap: 0, flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
@@ -2851,6 +2991,7 @@ export default function App() {
         );
       })()}
 
+      {/* ===== 枠クリック時の写真選択元メニュー ===== */}
       {showSlotPickerMenu && (
         <div
           onClick={() => { setShowSlotPickerMenu(false); setSlotPickerTargetId(null); setTargetSlotId(null); }}
@@ -2932,6 +3073,7 @@ export default function App() {
         </div>
       )}
 
+      {/* ===== ランダム配置ストック選択ポップアップ ===== */}
       {showFillStockPicker && (
         <div
           onClick={() => setShowFillStockPicker(false)}
@@ -2984,7 +3126,18 @@ export default function App() {
         </div>
       )}
 
+      {/* ===== ランダム配置モード選択ダイアログ ===== */}
       {showFillModeDialog && pendingFillStockIdx !== null && (() => {
+        const filledSlotIds = new Set(
+          items
+            .filter(item => item.type === 'photo')
+            .map(item => {
+              const m = item.id.match(/^photo-slot-(.+?)-\d+/);
+              return m ? m[1] : null;
+            })
+            .filter(Boolean)
+        );
+        const emptyCount = templateSlots.filter(slot => !filledSlotIds.has(slot.id)).length;
         const totalCount = templateSlots.length > 0
           ? templateSlots.length
           : items.filter(item => item.type === 'photo').length;
@@ -2998,12 +3151,27 @@ export default function App() {
           >
             <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 500, background: '#1e1e1e', borderRadius: '16px 16px 0 0', paddingBottom: 'env(safe-area-inset-bottom)' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 10px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>🎲 ランダムで枠を埋める</span>
+                <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>🎲 どのように配置しますか？</span>
                 <button onClick={() => { setShowFillModeDialog(false); setPendingFillStockIdx(null); }} style={{ background: 'none', border: 'none', color: '#aaa', fontSize: 20, cursor: 'pointer' }}>✕</button>
               </div>
               <div style={{ padding: '12px 16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <button
-onClick={() => handleFillAllSlots(pendingFillStockIdx)}
+                  onClick={() => handleFillAllSlots(pendingFillStockIdx, true)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 14, padding: '16px 18px', borderRadius: 12,
+                    border: '1.5px solid #4caf7d88', background: '#4caf7d18', color: '#fff', cursor: 'pointer', textAlign: 'left'
+                  }}
+                >
+                  <span style={{ fontSize: 28 }}>✨</span>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>あいている枠に入れる</div>
+                    <div style={{ fontSize: 11, color: '#4caf7d', marginTop: 3 }}>
+                      空き枠 {emptyCount} 枠にランダム配置
+                    </div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => handleFillAllSlots(pendingFillStockIdx, false)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 14, padding: '16px 18px', borderRadius: 12,
                     border: '1.5px solid #f26b9a88', background: '#f26b9a18', color: '#fff', cursor: 'pointer', textAlign: 'left'
@@ -3011,9 +3179,9 @@ onClick={() => handleFillAllSlots(pendingFillStockIdx)}
                 >
                   <span style={{ fontSize: 28 }}>🔀</span>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 700 }}>写真をランダムで流し込む</div>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>すべて写真を入れ替える</div>
                     <div style={{ fontSize: 11, color: '#f26b9a', marginTop: 3 }}>
-                      既存の枠内写真をクリアし、すべての枠（全 {totalCount} 箇所）に新しく写真を配置します
+                      全 {totalCount} 枠をランダムに置換
                     </div>
                   </div>
                 </button>
