@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import CropModal from './CropModal';
 import './index.css';
+import { usePlan } from './hooks/usePlan';
+import { UpgradeModal } from './UpgradeModal';
 
 // ===== ストック写真の型 =====
 interface StockPhoto {
@@ -480,6 +482,27 @@ function getClipPathStyle(shape: ClipShape): React.CSSProperties {
     };
   }
   return {};
+}
+
+function AdBanner() {
+  return (
+    <div style={{
+      width: '100%',
+      background: '#f0f0f0',
+      borderTop: '1px solid #ddd',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: 52,
+      flexShrink: 0,
+      fontSize: 12,
+      color: '#aaa',
+      gap: 6,
+    }}>
+      {/* ★ ここを Google AdSense や広告タグに差し替えてください ★ */}
+      <span>📢 広告スペース</span>
+    </div>
+  );
 }
 
 // PreviewModal コンポーネントを以下のように書き換えます
@@ -1252,6 +1275,17 @@ useEffect(() => {
   const [showFillModeDialog, setShowFillModeDialog] = useState(false);
   const [pendingFillStockIdx, setPendingFillStockIdx] = useState<0 | 1 | 2 | null>(null);
 
+  // ===== 有料プラン状態 =====
+  const { isPro } = usePlan();
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [upgradeFeatureName, setUpgradeFeatureName] = useState<string | undefined>(undefined);
+
+  // アップグレードモーダルを開くヘルパー
+  const openUpgrade = (featureName?: string) => {
+    setUpgradeFeatureName(featureName);
+    setShowUpgradeModal(true);
+  };
+
   // 枠クリック時の写真選択元メニュー
   const [showSlotPickerMenu, setShowSlotPickerMenu] = useState(false);
   const [slotPickerTargetId, setSlotPickerTargetId] = useState<string | null>(null);
@@ -1341,9 +1375,13 @@ useEffect(() => {
   };
 
   const handleCustomShapeClick = (shape: CustomSlotShape) => {
-    if (customSelected.length < 6) {
-      setCustomSelected(prev => [...prev, shape]);
+    // ハート・星は Pro のみ
+    if ((shape === 'heart' || shape === 'star') && !isPro) {
+      openUpgrade(shape === 'heart' ? 'ハート形枠' : '星形枠');
+      return;
     }
+    if (customSelected.length >= 6) return;
+    setCustomSelected(prev => [...prev, shape]);
   };
 
   // 修正箇所：関数を正しく定義
@@ -1892,30 +1930,45 @@ const handleSlotPickFromStock = (_stockIdx: 0 | 1 | 2, stockPhotoUrl: string) =>
                   >キャンセル</button>
                 </div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+<div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  {CUSTOM_SLOT_OPTIONS.map(opt => (
-                    <button
-                      key={opt.shape}
-                      onClick={() => handleCustomShapeClick(opt.shape)}
-                      disabled={customSelected.length >= 6}
-                      style={{
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                        background: 'none', border: 'none', cursor: customSelected.length < 6 ? 'pointer' : 'default',
-                        padding: '4px 2px', minWidth: 44,
-                      }}
-                    >
-                      <div style={{
-                        width: 48, height: 48,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        border: '1px solid #ddd', borderRadius: 8, background: 'white',
-                      }}>
-                        <div style={{ background: '#aaa', ...opt.thumbStyle }} />
-                      </div>
-                      <span style={{ fontSize: 10, color: '#555' }}>{opt.label}</span>
-                    </button>
-                  ))}
+                  {CUSTOM_SLOT_OPTIONS.map(opt => {
+                    // ここでロック対象（Pro以外でかつハートか星）かを判定
+                    const isLocked = (opt.shape === 'heart' || opt.shape === 'star') && !isPro;
+                    return (
+                      <button
+                        key={opt.shape}
+                        onClick={() => handleCustomShapeClick(opt.shape)}
+                        disabled={customSelected.length >= 6}
+                        style={{
+                          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                          background: 'none', border: 'none', cursor: customSelected.length < 6 ? 'pointer' : 'default',
+                          padding: '4px 2px', minWidth: 44,
+                          opacity: isLocked ? 0.5 : 1, // ロック時は半透明に
+                          position: 'relative',        // ロックアイコンの位置基準
+                        }}
+                      >
+                        <div style={{
+                          width: 48, height: 48,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          border: '1px solid #ddd', borderRadius: 8, background: 'white',
+                        }}>
+                          <div style={{ background: '#aaa', ...opt.thumbStyle }} />
+                        </div>
+                        <span style={{ fontSize: 10, color: '#555' }}>{opt.label}</span>
+                        {/* ロックされている場合だけ 🔒 を表示 */}
+                        {isLocked && (
+                          <span style={{
+                            position: 'absolute', top: 2, right: 2,
+                            fontSize: 10, color: '#999',
+                          }}>🔒</span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
+
                 <div style={{ display: 'flex', gap: 3, alignItems: 'center', justifyContent: 'center' }}>
                   {Array.from({ length: 6 }).map((_, i) => {
                     const s = customSelected[i];
@@ -2116,9 +2169,7 @@ case 'text': {
     }
   };
 
-  return (
-    <div className="app-container">
-      <header className="header">
+<header className="header">
         <button className="header-btn back-btn" onClick={undo} disabled={history.length === 0}>
           <Undo2 size={18} />
           <span>戻る</span>
@@ -2129,7 +2180,11 @@ case 'text': {
         </button>
       </header>
 
+      {/* ここに追加 */}
+      {!isPro && <AdBanner />}
+
       <main className="canvas-area" onClick={() => { setSelectedId(null); setPhotoSubMenuId(null); setPhotoSubMenuPos(null); setItemSubMenuId(null); setItemSubMenuPos(null); setActiveMainTab(null); setShowPhotoAddMenu(false); }}>
+
         <div
           ref={canvasRef}
           className="album-canvas"
@@ -3555,6 +3610,13 @@ justifyContent: 'center', // ← ここを追加して中央寄せにします
           </div>
         );
       })()}
+
+{showUpgradeModal && (
+        <UpgradeModal
+          featureName={upgradeFeatureName}
+          onClose={() => setShowUpgradeModal(false)}
+        />
+      )}
 
       {cropImageUrl && (
         <CropModal imageUrl={cropImageUrl} initialShape={cropInitialShape} onComplete={handleCropComplete} onCancel={() => { setCropImageUrl(null); setTargetSlotId(null); setCropInitialShape(undefined); }} />
