@@ -32,7 +32,7 @@ function extractExifDate(file: File): Promise<Date | null> {
           const marker = view.getUint16(offset);
           offset += 2;
           if (marker === 0xFFE1) { // APP1 (Exif)
-            offset += 2; // segLenの代わり。getUint16で2バイト分進んでいるためt);
+            offset += 2; // segLenの代わり。getUint16で2バイト分進んでいるため
             const exifHeader = String.fromCharCode(
               view.getUint8(offset + 2), view.getUint8(offset + 3),
               view.getUint8(offset + 4), view.getUint8(offset + 5)
@@ -50,7 +50,6 @@ function extractExifDate(file: File): Promise<Date | null> {
               const tag = getU16(entryOffset);
               // 0x9003: DateTimeOriginal
               if (tag === 0x9003 || tag === 0x0132) {
-                // type は取得しなくてOK
                 const count = getU32(entryOffset + 4);
                 const valueOffset = count > 4
                   ? tiffStart + getU32(entryOffset + 8)
@@ -135,7 +134,7 @@ type TextStyleId =
 interface TextStyleDef {
   id: TextStyleId;
   label: string;
-  preview: string; // preview CSS style string (textShadow / WebkitTextStroke etc.)
+  preview: string;
 }
 
 const TEXT_STYLES: TextStyleDef[] = [
@@ -149,15 +148,16 @@ const TEXT_STYLES: TextStyleDef[] = [
   { id: 'arch-down',      label: 'アーチ↓',  preview: '' },
   { id: 'wave',           label: 'ウェーブ', preview: '' },
 ];
+
 const FONT_FAMILIES = [
   { name: 'sans-serif', label: 'ゴシック' },
   { name: 'serif', label: '明朝体' },
-  { name: '"M PLUS Rounded 1c", sans-serif', label: '丸ゴシック' }, // Webフォント等がある場合
+  { name: '"M PLUS Rounded 1c", sans-serif', label: '丸ゴシック' },
   { name: '"Permanent Marker", cursive', label: '手書き風' },
 ];
 
 function getTextCssStyle(styleId: TextStyleId | undefined, color: string, fontFamily: string): React.CSSProperties {
-  const base: React.CSSProperties = { color, fontFamily }; // ← fontFamily を追加
+  const base: React.CSSProperties = { color, fontFamily };
   switch (styleId) {
     case 'shadow':
       return { ...base, textShadow: '2px 3px 6px rgba(0,0,0,0.55)' };
@@ -177,10 +177,9 @@ function getTextCssStyle(styleId: TextStyleId | undefined, color: string, fontFa
 }
 
 // アーチ/ウェーブはSVGで描画
-function ArchText({ text, color, fontSize, styleId, width, height, fontFamily }: { // ← fontFamily を追加
-text: string; color: string; fontSize: number; styleId: TextStyleId; width: number; height: number; fontFamily: string; // ← 型も追加
+function ArchText({ text, color, fontSize, styleId, width, height, fontFamily }: {
+  text: string; color: string; fontSize: number; styleId: TextStyleId; width: number; height: number; fontFamily: string;
 }) {
-
   const id = `arch-${Math.random().toString(36).slice(2)}`;
   const r = width * 0.9;
   const cx = width / 2;
@@ -277,7 +276,7 @@ const TEMPLATES: TemplateData[] = [
     id: 'four',
     name: 'スクエア６',
     slots: [
-{ id: 's1', x: 20,  y: 65,  width: 150, height: 115 },
+      { id: 's1', x: 20,  y: 65,  width: 150, height: 115 },
       { id: 's2', x: 190, y: 65,  width: 150, height: 115 },
       { id: 's3', x: 20,  y: 195, width: 150, height: 115 },
       { id: 's4', x: 190, y: 195, width: 150, height: 115 },
@@ -285,15 +284,13 @@ const TEMPLATES: TemplateData[] = [
       { id: 's6', x: 190, y: 325, width: 150, height: 115 },
     ],
   },
-{
+  {
     id: 'circle',
     name: 'サークル６',
     slots: [
-      // 上段：左に中円、右に小円×2
       { id: 's1', x: 15,  y: 65,  width: 155, height: 155, style: { borderRadius: '50%' } },
       { id: 's2', x: 210, y: 60,  width: 110, height: 110, style: { borderRadius: '50%' } },
       { id: 's3', x: 225, y: 180, width: 95,  height: 95,  style: { borderRadius: '50%' } },
-      // 下段：左に小円×2、右に中円
       { id: 's4', x: 45,  y: 235, width: 90,  height: 90,  style: { borderRadius: '50%' } },
       { id: 's5', x: 30,  y: 340, width: 105, height: 105, style: { borderRadius: '50%' } },
       { id: 's6', x: 175, y: 300, width: 165, height: 165, style: { borderRadius: '50%' } },
@@ -307,7 +304,6 @@ type CustomSlotShape = 'square' | 'rect-v' | 'rect-h' | 'circle' | 'ellipse-v' |
 interface CustomSlotOption {
   shape: CustomSlotShape;
   label: string;
-  // サムネイル用の表示スタイル
   thumbStyle: React.CSSProperties;
 }
 
@@ -322,24 +318,21 @@ const CUSTOM_SLOT_OPTIONS: CustomSlotOption[] = [
   { shape: 'star',      label: '星',       thumbStyle: { width: 36, height: 36, clipPath: 'polygon(50% 0%, 61.8% 35.4%, 98.1% 34.5%, 69.1% 57.3%, 79.4% 90.5%, 50% 70%, 20.6% 90.5%, 30.9% 57.3%, 1.9% 34.5%, 38.2% 35.4%)' } },
 ];
 
-// 6マスの配置（左上→右上→中左→中右→下左→下右）
-// shape ごとのサイズ比率（CANVAS_W=360, CANVAS_H=480 を基準）
 function buildCustomSlots(shapes: CustomSlotShape[]): SlotData[] {
-  const PAD = 8;      // 外側余白
-  const GAP = 6;      // 枠間隔
-  const TOP_OFFSET = 52; // 上部タイトルスペース
+  const PAD = 8;
+  const GAP = 6;
+  const TOP_OFFSET = 52;
   const colW = (CANVAS_W - PAD * 2 - GAP) / 2;
   const availH = CANVAS_H - TOP_OFFSET - PAD - GAP * 2;
   const rowH = availH / 3;
 
-  // 6マスのグリッド座標（col 0=左, 1=右  / row 0=上, 1=中, 2=下）
   const grid = [
-    { col: 0, row: 0 }, // 1: 左上
-    { col: 1, row: 0 }, // 2: 右上
-    { col: 0, row: 1 }, // 3: 中左
-    { col: 1, row: 1 }, // 4: 中右
-    { col: 0, row: 2 }, // 5: 下左
-    { col: 1, row: 2 }, // 6: 下右
+    { col: 0, row: 0 },
+    { col: 1, row: 0 },
+    { col: 0, row: 1 },
+    { col: 1, row: 1 },
+    { col: 0, row: 2 },
+    { col: 1, row: 2 },
   ];
 
   return shapes.map((shape, i) => {
@@ -347,7 +340,6 @@ function buildCustomSlots(shapes: CustomSlotShape[]): SlotData[] {
     const cx = PAD + col * (colW + GAP);
     const cy = TOP_OFFSET + row * (rowH + GAP);
 
-    // セル内に収めるサイズ（形状ごとにアスペクト比を変える）
     let w = colW, h = rowH;
     if (shape === 'square') {
       const s = Math.min(colW, rowH);
@@ -401,7 +393,6 @@ type RandomShape = 'square' | 'rect-v' | 'rect-h' | 'circle' | 'ellipse-v' | 'el
 
 function buildRandomSlots(): SlotData[] {
   const shapes: RandomShape[] = ['square', 'rect-v', 'rect-h', 'circle', 'ellipse-v', 'ellipse-h', 'heart', 'star'];
-  // 6つランダムに選ぶ（重複あり）
   const picked: RandomShape[] = Array.from({ length: 6 }, () => shapes[Math.floor(Math.random() * shapes.length)]);
 
   const PAD = 8;
@@ -440,14 +431,12 @@ function buildRandomSlots(): SlotData[] {
     const x = cx + (colW - w) / 2;
     const y = cy + (rowH - h) / 2;
 
-let slotStyle: React.CSSProperties | undefined;
+    let slotStyle: React.CSSProperties | undefined;
     if (shape === 'circle' || shape === 'ellipse-v' || shape === 'ellipse-h') {
       slotStyle = { borderRadius: '50%' };
     } else if (shape === 'heart') {
-      // 修正後：カスタム配置と同じ高精度なハートの形
       slotStyle = { clipPath: 'polygon(50% 25%, 60% 10%, 75% 5%, 90% 10%, 100% 25%, 100% 42%, 85% 60%, 65% 78%, 50% 100%, 35% 78%, 15% 60%, 0% 42%, 0% 25%, 10% 10%, 25% 5%, 40% 10%)' };
     } else if (shape === 'star') {
-      // 修正後：カスタム配置と同じ高精度な星の形
       slotStyle = { clipPath: 'polygon(50% 0%, 61.8% 35.4%, 98.1% 34.5%, 69.1% 57.3%, 79.4% 90.5%, 50% 70%, 20.6% 90.5%, 30.9% 57.3%, 1.9% 34.5%, 38.2% 35.4%)' };
     }
 
@@ -462,11 +451,8 @@ let slotStyle: React.CSSProperties | undefined;
   });
 }
 
-// ===== Canvas上のclip-path CSS生成 =====
-// CropModalのgetCroppedImgと同じ形状をCSS clip-pathで再現
 function getClipPathStyle(shape: ClipShape): React.CSSProperties {
   if (shape === 'heart') {
-    // CropModalのbezierCurveToと同じ形状をpolygon近似で表現
     return {
       clipPath: 'polygon(50% 25%, 60% 10%, 75% 5%, 90% 10%, 100% 25%, 100% 42%, 85% 60%, 65% 78%, 50% 100%, 35% 78%, 15% 60%, 0% 42%, 0% 25%, 10% 10%, 25% 5%, 40% 10%)',
     };
@@ -499,23 +485,17 @@ function AdBanner() {
       color: '#aaa',
       gap: 6,
     }}>
-      {/* ★ ここを Google AdSense や広告タグに差し替えてください ★ */}
       <span>📢 広告スペース</span>
     </div>
   );
 }
 
-// PreviewModal コンポーネントを以下のように書き換えます
 function PreviewModal({ dataUrl, onClose }: { dataUrl: string; onClose: () => void }) {
   return (
     <div className="preview-overlay" onClick={onClose}>
       <div className="preview-modal" onClick={e => e.stopPropagation()}>
         <div style={{ marginBottom: '10px', fontWeight: 'bold', color: '#fff' }}>完成画像</div>
-        
-        {/* 画像本体 */}
         <img src={dataUrl} alt="preview" className="preview-img" style={{ maxWidth: '100%', maxHeight: '60vh', borderRadius: '8px' }} />
-        
-        {/* iPhoneユーザー向けの案内メッセージ */}
         <div style={{ 
           color: '#eee', 
           fontSize: '13px', 
@@ -530,7 +510,6 @@ function PreviewModal({ dataUrl, onClose }: { dataUrl: string; onClose: () => vo
           <strong>「"写真"に追加」</strong>を選択すると<br />
           カメラロールに保存されます。
         </div>
-
         <div className="preview-actions" style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'center' }}>
           <button className="preview-btn close" onClick={onClose} style={{ padding: '10px 20px', borderRadius: '20px', border: 'none', cursor: 'pointer' }}>
             閉じる
@@ -555,7 +534,7 @@ interface RotateHandleProps {
 
 function RotateHandle({ itemId, itemX, itemY, itemW, itemH, rotation, onRotate, position = 'bottomRight' }: RotateHandleProps) {
   const isDragging = useRef(false);
-  const startAngleOffset = useRef(0); // 追加：開始時の角度差分を保存
+  const startAngleOffset = useRef(0);
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     e.stopPropagation();
@@ -563,7 +542,6 @@ function RotateHandle({ itemId, itemX, itemY, itemW, itemH, rotation, onRotate, 
     isDragging.current = true;
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
 
-    // 1. ハンドルを掴んだ瞬間のマウスの角度を計算
     const handle = e.target as HTMLElement;
     const canvas = handle.closest('.album-canvas') as HTMLElement;
     if (!canvas) return;
@@ -575,7 +553,6 @@ function RotateHandle({ itemId, itemX, itemY, itemW, itemH, rotation, onRotate, 
     const dy = e.clientY - cy;
     const clickAngle = Math.atan2(dy, dx) * (180 / Math.PI);
     
-    // 2. 現在のアイテムの回転角との「差」を保存しておく
     startAngleOffset.current = clickAngle - rotation;
 
     const onMove = (moveEvent: PointerEvent) => {
@@ -585,7 +562,6 @@ function RotateHandle({ itemId, itemX, itemY, itemW, itemH, rotation, onRotate, 
       const mdy = moveEvent.clientY - cy;
       const currentMouseAngle = Math.atan2(mdy, mdx) * (180 / Math.PI);
       
-      // 3. マウスの移動角度から初期の差分を引くことで、スムーズに回転を開始させる
       const newAngle = currentMouseAngle - startAngleOffset.current;
       onRotate(itemId, Math.round(newAngle));
     };
@@ -598,7 +574,7 @@ function RotateHandle({ itemId, itemX, itemY, itemW, itemH, rotation, onRotate, 
 
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
-  }, [itemId, itemX, itemY, itemW, itemH, rotation, onRotate]); // rotationを依存配列に追加
+  }, [itemId, itemX, itemY, itemW, itemH, rotation, onRotate]);
 
   return (
     <div
@@ -607,7 +583,6 @@ function RotateHandle({ itemId, itemX, itemY, itemW, itemH, rotation, onRotate, 
       title="ドラッグで回転"
       style={position === 'topLeft' ? { bottom: 'auto', right: 'auto', top: -14, left: -14 } : undefined}
     >
-      {/* SVG内容はそのまま */}
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21 2v6h-6" /><path d="M3 12a9 9 0 0 1 15-6.7L21 8" /><path d="M3 22v-6h6" /><path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
       </svg>
@@ -622,9 +597,9 @@ type BgState = {
   pattern: string;
   patternType: string;
   gradientDir: string;
-  bgImage?: string; // 背景画像URL（設定時はこちらが優先）
-  bgPhotoOpacity?: number; // 写真背景の不透明度 0〜1（1=そのまま, 0=白）
-  bgPhotoUrl?: string; // デバイス写真から選んだ背景URL
+  bgImage?: string;
+  bgPhotoOpacity?: number;
+  bgPhotoUrl?: string;
 };
 
 function getCanvasBgStyle(bg: BgState): React.CSSProperties {
@@ -649,7 +624,6 @@ function getCanvasBgStyle(bg: BgState): React.CSSProperties {
   return { backgroundColor: bg.color };
 }
 
-// SVGパターンをキャンバス全面に重ねるコンポーネント
 function BgPatternSvg({ patternType, color, color2, width, height }: {
   patternType: string; color: string; color2: string; width: number; height: number;
 }) {
@@ -719,7 +693,6 @@ function BgPatternSvg({ patternType, color, color2, width, height }: {
   );
 }
 
-// ===== 背景パターン定義 =====
 const PATTERN_DEFS = [
   { id: 'solid',    label: '無地',   icon: '■' },
   { id: 'checker',  label: '格子',   icon: '⊞' },
@@ -746,8 +719,6 @@ const PRESET_COLORS = [
   '#bbbbbb', '#000000',
 ];
 
-// ===== 背景画像リスト =====
-// シリーズごとに管理。画像を追加する場合は files 配列に追加するだけ。
 interface BgSeries {
   id: string;
   label: string;
@@ -781,9 +752,6 @@ const BG_SERIES: BgSeries[] = [
   },
 ];
 
-// ===== スタンプ画像定義 =====
-// カテゴリーを追加する場合は STAMP_CATEGORIES と STAMP_FILES を編集してください。
-// 画像ファイルは public/stamps/with-bg/ または public/stamps/no-bg/ に配置してください。
 type StampCategory = 'with-bg' | 'no-bg';
 
 interface StampCategoryDef {
@@ -796,35 +764,23 @@ const STAMP_CATEGORIES: StampCategoryDef[] = [
   { id: 'with-bg', label: 'プレート' },
 ];
 
-// ファイルを追加するときはここに追記するだけでOK
-// 001〜012 と 101〜112 の2シリーズ（計24枚）に対応
 const STAMP_FILES: Record<StampCategory, string[]> = {
   'no-bg': [
-    ...Array.from({ length: 12 }, (_, i) =>
-      `/stamps/no-bg/colabammojitouka${String(i + 1).padStart(3, '0')}.png`
-    ),
-    ...Array.from({ length: 12 }, (_, i) =>
-      `/stamps/no-bg/colabammojitouka${String(i + 101).padStart(3, '0')}.png`
-    ),
+    ...Array.from({ length: 12 }, (_, i) => `/stamps/no-bg/colabammojitouka${String(i + 1).padStart(3, '0')}.png`),
+    ...Array.from({ length: 12 }, (_, i) => `/stamps/no-bg/colabammojitouka${String(i + 101).padStart(3, '0')}.png`),
   ],
   'with-bg': [
-    ...Array.from({ length: 12 }, (_, i) =>
-      `/stamps/with-bg/colabammojiimg${String(i + 1).padStart(3, '0')}.jpg`
-    ),
-    ...Array.from({ length: 12 }, (_, i) =>
-      `/stamps/with-bg/colabammojiimg${String(i + 101).padStart(3, '0')}.jpg`
-    ),
+    ...Array.from({ length: 12 }, (_, i) => `/stamps/with-bg/colabammojiimg${String(i + 1).padStart(3, '0')}.jpg`),
+    ...Array.from({ length: 12 }, (_, i) => `/stamps/with-bg/colabammojiimg${String(i + 101).padStart(3, '0')}.jpg`),
   ],
 };
 
-// ===== スタンプメニューコンポーネント =====
 function StampMenu({ onAdd }: { onAdd: (url: string) => void }) {
   const [activeCategory, setActiveCategory] = useState<StampCategory>('no-bg');
   const files = STAMP_FILES[activeCategory];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, height: '100%' }}>
-      {/* カテゴリータブ */}
       <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
         {STAMP_CATEGORIES.map(cat => (
           <button
@@ -842,7 +798,6 @@ function StampMenu({ onAdd }: { onAdd: (url: string) => void }) {
         ))}
       </div>
 
-      {/* スタンプ画像グリッド */}
       {files.length === 0 ? (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, color: '#aaa', fontSize: 12 }}>
           画像を追加してください<br />
@@ -876,7 +831,6 @@ function StampMenu({ onAdd }: { onAdd: (url: string) => void }) {
   );
 }
 
-// ===== 背景画像タブ（シリーズ切替） =====
 function ImageBgTab({ canvasBg, setCanvasBg }: {
   canvasBg: BgState;
   setCanvasBg: React.Dispatch<React.SetStateAction<BgState>>;
@@ -886,9 +840,7 @@ function ImageBgTab({ canvasBg, setCanvasBg }: {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minHeight: 0 }}>
-      {/* シリーズ切替タブ */}
       <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-        {/* 画像なしボタン */}
         <button
           onClick={() => setCanvasBg(prev => ({ ...prev, bgImage: undefined }))}
           style={{
@@ -898,7 +850,6 @@ function ImageBgTab({ canvasBg, setCanvasBg }: {
             fontWeight: !canvasBg.bgImage ? 'bold' : 'normal', whiteSpace: 'nowrap', flexShrink: 0,
           }}
         >✕ なし</button>
-        {/* シリーズタブ */}
         {BG_SERIES.map(s => (
           <button
             key={s.id}
@@ -914,7 +865,6 @@ function ImageBgTab({ canvasBg, setCanvasBg }: {
           >{s.label}</button>
         ))}
       </div>
-      {/* サムネイル横スクロール */}
       <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
         {series.files.map((src, i) => (
           <button
@@ -970,7 +920,6 @@ function BgMenu({ canvasBg, setCanvasBg }: {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {/* タブ切替：背景画像 / カラー / 写真から選ぶ */}
       <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
         <button
           onClick={() => setBgTab('image')}
@@ -997,7 +946,6 @@ function BgMenu({ canvasBg, setCanvasBg }: {
 
       {bgTab === 'color' && (
         <>
-          {/* パターン選択 */}
           <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2, flexShrink: 0, justifyContent: 'center' }}>
             {PATTERN_DEFS.map(p => (
               <button
@@ -1016,7 +964,6 @@ function BgMenu({ canvasBg, setCanvasBg }: {
             ))}
           </div>
 
-          {/* グラデーション方向 */}
           {canvasBg.patternType === 'gradient' && (
             <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexShrink: 0 }}>
               <span style={{ fontSize: 10, color: '#888', whiteSpace: 'nowrap' }}>方向:</span>
@@ -1034,7 +981,6 @@ function BgMenu({ canvasBg, setCanvasBg }: {
             </div>
           )}
 
-          {/* カラーターゲット切替（無地以外） */}
           {needsColor2 && (
             <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexShrink: 0 }}>
               <button
@@ -1062,7 +1008,6 @@ function BgMenu({ canvasBg, setCanvasBg }: {
             </div>
           )}
 
-          {/* カラーパレット */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(13, 24px)', gap: 5, flexShrink: 0, justifyContent: 'center' }}>
             {PRESET_COLORS.map(c => (
               <button
@@ -1077,7 +1022,6 @@ function BgMenu({ canvasBg, setCanvasBg }: {
                 }}
               />
             ))}
-            {/* カスタム色入力 */}
             <label style={{ width: 24, height: 24, borderRadius: 4, border: '2px solid #ccc', overflow: 'hidden', cursor: 'pointer', flexShrink: 0 }}>
               <input type="color" value={currentColor} onChange={e => setColor(e.target.value)}
                 style={{ width: 30, height: 30, border: 'none', padding: 0, marginTop: -3, marginLeft: -3, cursor: 'pointer' }} />
@@ -1092,7 +1036,6 @@ function BgMenu({ canvasBg, setCanvasBg }: {
 
       {bgTab === 'photo' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {/* 写真選択ボタン */}
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button
               onClick={() => photoInputRef.current?.click()}
@@ -1117,7 +1060,6 @@ function BgMenu({ canvasBg, setCanvasBg }: {
             )}
           </div>
 
-          {/* プレビューサムネイル */}
           {canvasBg.bgPhotoUrl && (
             <div style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid #eee', height: 60, position: 'relative', flexShrink: 0 }}>
               <img
@@ -1133,7 +1075,6 @@ function BgMenu({ canvasBg, setCanvasBg }: {
             </div>
           )}
 
-          {/* 薄さ調整スライダー */}
           {canvasBg.bgPhotoUrl && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1182,54 +1123,45 @@ function BgMenu({ canvasBg, setCanvasBg }: {
 
 // ===== Main App =====
 export default function App() {
-  // iPhoneのinputフォーカス時の自動ズームを防ぐ
-  // iOS15以降はmaximum-scale=1が無視されるため、focus時にscaleを1に固定し、blur時に戻す
-useEffect(() => {
-  const setViewport = (content: string) => {
-    let viewport = document.querySelector('meta[name="viewport"]');
-    if (!viewport) {
-      viewport = document.createElement('meta');
-      (viewport as HTMLMetaElement).name = 'viewport';
-      document.head.appendChild(viewport);
-    }
-    viewport.setAttribute('content', content);
-  };
+  useEffect(() => {
+    const setViewport = (content: string) => {
+      let viewport = document.querySelector('meta[name="viewport"]');
+      if (!viewport) {
+        viewport = document.createElement('meta');
+        (viewport as HTMLMetaElement).name = 'viewport';
+        document.head.appendChild(viewport);
+      }
+      viewport.setAttribute('content', content);
+    };
 
-  // iOSでの自動ズームを防ぐための決定版：
-  // initial-scale=1 に加え、maximum-scale=1 を「常に」指定し、
-  // かつユーザーによるピンチズームも無効化 (user-scalable=no) する設定です。
-  const noZoomConfig = "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no";
+    const noZoomConfig = "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no";
+    setViewport(noZoomConfig);
 
-  setViewport(noZoomConfig);
-
-  // focusin/out での設定変更は不要（常に固定）にするのが最も安定します。
-  return () => {
-    // クリーンアップ時も標準的な設定に戻す
-    setViewport("width=device-width, initial-scale=1");
-  };
-}, []);
+    return () => {
+      setViewport("width=device-width, initial-scale=1");
+    };
+  }, []);
 
   const [items, setItems] = useState<CanvasItem[]>([]);
   const [history, setHistory] = useState<CanvasItem[][]>([]);
   const [templateSlots, setTemplateSlots] = useState<SlotData[]>([]);
   const [activeMainTab, setActiveMainTab] = useState<MainTab | null>(null);
-  // ===== Background State =====
-  // patternType: 'solid' | 'checker' | 'dots' | 'stripe-v' | 'stripe-h' | 'stars' | 'gradient'
+
   const [canvasBg, setCanvasBg] = useState<{
     color: string;
-    color2: string;        // セカンダリカラー（格子・水玉・ストライプの模様色、グラデーション終点色）
-    pattern: string;       // legacy 'checker' など
-    patternType: string;   // 新しいパターン種別
-    gradientDir: string;   // グラデーション方向 'to bottom' | 'to right' | '135deg' etc.
-    bgImage?: string;      // 背景画像URL（設定時はこちらが優先）
-    bgPhotoOpacity?: number; // 写真背景の不透明度 0〜1
-    bgPhotoUrl?: string;   // デバイス写真から選んだ背景URL
+    color2: string;
+    pattern: string;
+    patternType: string;
+    gradientDir: string;
+    bgImage?: string;
+    bgPhotoOpacity?: number;
+    bgPhotoUrl?: string;
   }>(() => {
-    // アプリ起動時の秒数が偶数→998、奇数→999 をデフォルト背景に
     const randomBgImages = ['/colabam_bimg997.jpg', '/colabam_bimg998.jpg', '/colabam_bimg999.jpg'];
     const initialBgImage = randomBgImages[Math.floor(Math.random() * randomBgImages.length)];
     return { color: '#fffbe6', color2: '#f26b9a', pattern: 'none', patternType: 'solid', gradientDir: 'to bottom', bgImage: initialBgImage, bgPhotoOpacity: 1, bgPhotoUrl: undefined };
   });
+
   const [targetSlotId, setTargetSlotId] = useState<string | null>(null);
   const [cropImageUrl, setCropImageUrl] = useState<string | null>(null);
   const [cropInitialShape, setCropInitialShape] = useState<'square' | 'rectangle' | 'rectangle-h' | 'circle' | 'ellipse' | 'ellipse-h' | 'heart' | 'star' | undefined>(undefined);
@@ -1244,49 +1176,36 @@ useEffect(() => {
   const [textStyle, setTextStyle] = useState<TextStyleId>('normal');
   const [fontFamily, setFontFamily] = useState('sans-serif');
 
-  // 写真サブメニュー用state
   const [photoSubMenuId, setPhotoSubMenuId] = useState<string | null>(null);
   const [photoSubMenuPos, setPhotoSubMenuPos] = useState<{ x: number; y: number } | null>(null);
   const [replaceTargetId, setReplaceTargetId] = useState<string | null>(null);
   const [retrimTargetId, setRetrimTargetId] = useState<string | null>(null);
 
-  // スタンプ・テキストサブメニュー用state
   const [itemSubMenuId, setItemSubMenuId] = useState<string | null>(null);
   const [itemSubMenuPos, setItemSubMenuPos] = useState<{ x: number; y: number } | null>(null);
 
-  // 写真ストック（3つのストック）
   const [photoStocks, setPhotoStocks] = useState<StockPhoto[][]>([[], [], []]);
-  // 現在操作中のストックインデックス（0=ストック1, 1=ストック2, 2=ストック3）
   const [activeStockIndex, setActiveStockIndex] = useState<0 | 1 | 2>(0);
-  // 写真追加サブメニューの表示
   const [showPhotoAddMenu, setShowPhotoAddMenu] = useState(false);
- // const photoAddMenuRef = useRef<HTMLDivElement>(null);
-  // ストック整理モーダル
   const [showStockOrganizer, setShowStockOrganizer] = useState(false);
   const [stockDeleteSelected, setStockDeleteSelected] = useState<Set<number>>(new Set());
-  // 日付フィルタ確認モーダル（ストック追加時）
   const [pendingStockPhotos, setPendingStockPhotos] = useState<StockPhoto[]>([]);
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [dateFilterFrom, setDateFilterFrom] = useState('');
   const [dateFilterTo, setDateFilterTo] = useState('');
-  // ストック選択ポップアップ（ランダム配置用）
   const [showFillStockPicker, setShowFillStockPicker] = useState(false);
-  // ランダム配置モード確認ダイアログ
   const [showFillModeDialog, setShowFillModeDialog] = useState(false);
   const [pendingFillStockIdx, setPendingFillStockIdx] = useState<0 | 1 | 2 | null>(null);
 
-  // ===== 有料プラン状態 =====
   const { isPro } = usePlan();
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [upgradeFeatureName, setUpgradeFeatureName] = useState<string | undefined>(undefined);
 
-  // アップグレードモーダルを開くヘルパー
   const openUpgrade = (featureName?: string) => {
     setUpgradeFeatureName(featureName);
     setShowUpgradeModal(true);
   };
 
-  // 枠クリック時の写真選択元メニュー
   const [showSlotPickerMenu, setShowSlotPickerMenu] = useState(false);
   const [slotPickerTargetId, setSlotPickerTargetId] = useState<string | null>(null);
 
@@ -1312,10 +1231,8 @@ useEffect(() => {
     const w = extra?.width ?? defaultW;
     const h = extra?.height ?? defaultH;
 
-    // スタンプはキャンバス中央上部に配置（画像の添付例に合わせた位置）
-    // 既にスタンプがその付近にある場合は少し下にずらす
-    const STAGGER_STEP = 30; // ずらす量(px)
-    const BASE_Y_STAMP = Math.round(CANVAS_H * 0.12); // キャンバス高さの12%（上寄り中央）
+    const STAGGER_STEP = 30;
+    const BASE_Y_STAMP = Math.round(CANVAS_H * 0.12);
 
     let defaultX = 50;
     let defaultY = 50;
@@ -1324,7 +1241,6 @@ useEffect(() => {
       defaultX = Math.round((CANVAS_W - w) / 2);
       defaultY = BASE_Y_STAMP;
 
-      // 既存スタンプがこの付近にある場合、重ならないようにずらす
       const THRESHOLD = 40;
       let staggerCount = 0;
       for (const existing of items) {
@@ -1375,7 +1291,6 @@ useEffect(() => {
   };
 
   const handleCustomShapeClick = (shape: CustomSlotShape) => {
-    // ハート・星は Pro のみ
     if ((shape === 'heart' || shape === 'star') && !isPro) {
       openUpgrade(shape === 'heart' ? 'ハート形枠' : '星形枠');
       return;
@@ -1384,7 +1299,6 @@ useEffect(() => {
     setCustomSelected(prev => [...prev, shape]);
   };
 
-  // 修正箇所：関数を正しく定義
   const applyTemplate = (template: TemplateData) => {
     confirmAndApply(() => {
       pushHistory(items);
@@ -1403,7 +1317,6 @@ useEffect(() => {
     setCanvasBg({ color: '#fffbe6', color2: '#f26b9a', pattern: 'none', patternType: 'solid', gradientDir: 'to bottom', bgImage: resetBgImage, bgPhotoOpacity: 1, bgPhotoUrl: undefined });
   };
 
-  // アップロード時の元画像URLを一時保持するref（クロップ完了時にCanvasItemへ渡す）
   const pendingOriginalUrl = useRef<string | null>(null);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1412,7 +1325,7 @@ useEffect(() => {
     const reader = new FileReader();
     reader.onload = (ev) => {
       const url = ev.target?.result as string;
-      pendingOriginalUrl.current = url; // 元画像を保存
+      pendingOriginalUrl.current = url;
       setCropImageUrl(url);
     };
     reader.readAsDataURL(file);
@@ -1425,7 +1338,6 @@ useEffect(() => {
       : undefined;
 
     if (targetSlotId === '__replace__' && replaceTargetId) {
-      // 写真を差し替え（サイズ・位置・zIndexは維持、元画像も更新）
       const originalUrl = pendingOriginalUrl.current ?? undefined;
       pushHistory(items);
       setItems(prev => prev.map(i =>
@@ -1441,7 +1353,6 @@ useEffect(() => {
     }
 
     if (targetSlotId === '__retrim__' && retrimTargetId) {
-      // トリミングやり直し（元画像URLはそのまま維持）
       pushHistory(items);
       setItems(prev => prev.map(i =>
         i.id === retrimTargetId
@@ -1465,7 +1376,7 @@ useEffect(() => {
           id: `photo-slot-${targetSlotId}-${Date.now()}`,
           type: 'photo',
           content: croppedDataUrl,
-          originalImageUrl: originalUrl, // 元画像を保存
+          originalImageUrl: originalUrl,
           x: slot.x,
           y: slot.y,
           width: slot.width,
@@ -1486,48 +1397,40 @@ useEffect(() => {
     pendingOriginalUrl.current = null;
   };
 
-// Appコンポーネント内の saveAlbum 関数を以下のように書き換えます
+  const saveAlbum = async () => {
+    setSelectedId(null);
+    await new Promise(r => setTimeout(r, 100));
+    
+    if (!canvasRef.current) return;
 
-const saveAlbum = async () => {
-  setSelectedId(null);
-  // レンダリング待ち
-  await new Promise(r => setTimeout(r, 100));
-  
-  if (!canvasRef.current) return;
-
-  try {
-    const scale = EXPORT_W / CANVAS_W;
-    const canvas = await html2canvas(canvasRef.current, {
-      useCORS: true,
-      scale,
-      width: CANVAS_W,
-      height: CANVAS_H,
-      backgroundColor: '#000', // 背景色を明示
-    });
-
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.90);
-
-    // --- ここから iPhone 共有機能の呼び出し ---
-    const res = await fetch(dataUrl);
-    const blob = await res.blob();
-    const file = new File([blob], `my-album-${Date.now()}.jpg`, { type: 'image/jpeg' });
-
-    // ブラウザが共有機能に対応しているかチェック (iPhone Safariなど)
-    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({
-        files: [file],
-        title: 'アルバム保存',
+    try {
+      const scale = EXPORT_W / CANVAS_W;
+      const canvas = await html2canvas(canvasRef.current, {
+        useCORS: true,
+        scale,
+        width: CANVAS_W,
+        height: CANVAS_H,
+        backgroundColor: '#000',
       });
-    } else {
-      // 共有に対応していない（PCなど）場合は、従来のプレビューモーダルを表示
-      setPreviewUrl(dataUrl);
-    }
-    // ---------------------------------------
 
-  } catch (err) {
-    console.error("保存に失敗しました", err);
-  }
-};
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.90);
+
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+      const file = new File([blob], `my-album-${Date.now()}.jpg`, { type: 'image/jpeg' });
+
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'アルバム保存',
+        });
+      } else {
+        setPreviewUrl(dataUrl);
+      }
+    } catch (err) {
+      console.error("保存に失敗しました", err);
+    }
+  };
 
   const handleSlotClick = (slotId: string) => {
     const slot = templateSlots.find(s => s.id === slotId);
@@ -1555,56 +1458,71 @@ const saveAlbum = async () => {
     setShowSlotPickerMenu(true);
   };
 
-  // ストックから1枚を選んでクロップなしで枠に配置するヘルパー
-const handleSlotPickFromStock = (_stockIdx: 0 | 1 | 2, stockPhotoUrl: string) => {
-  maxZIndex.current += 1;
+  const slotStyleToClipShape = (slot: SlotData): ClipShape | undefined => {
+    const style = slot.style ?? {};
+    const clipPath = (style as React.CSSProperties).clipPath as string | undefined;
+    if (!clipPath) return undefined;
+    if (clipPath.includes('50% 25%') || clipPath.includes('50% 15%')) return 'heart';
+    if (clipPath.includes('61.8%') || clipPath.includes('61% 35%')) return 'star';
+    if (clipPath.includes('75%, 75% 75%') || clipPath.includes('75% 75%')) return 'bubble';
+    return undefined;
+  };
 
-  if (slotPickerTargetId) {
-    // 【パターンA】空のスロット（枠）をクリックして選んだ場合
-    const slot = templateSlots.find(s => s.id === slotPickerTargetId);
-    if (!slot) return;
-    const clipShape = slotStyleToClipShape(slot);
-    
-    const newItem: CanvasItem = {
-      id: `photo-slot-${slot.id}-${Date.now()}`,
-      type: 'photo',
-      content: stockPhotoUrl,
-      originalImageUrl: stockPhotoUrl,
-      x: slot.x,
-      y: slot.y,
-      width: slot.width,
-      height: slot.height,
-      rotation: slot.rotation ?? 0,
-      zIndex: maxZIndex.current,
-      clipShape,
-    };
-    pushHistory(items);
-    setItems(prev => [...prev, newItem]);
-    setTemplateSlots(prev => prev.filter(s => s.id !== slotPickerTargetId));
-  } else {
-    // 【パターンB】「写真追加」→「1枚追加」から選んだ場合
-    // クロップ画面を挟まずに、ストック写真をそのまま正方形として追加
-    const newItem: CanvasItem = {
-      id: `photo-direct-${Date.now()}`,
-      type: 'photo',
-      content: stockPhotoUrl,
-      originalImageUrl: stockPhotoUrl,
-      x: 50,
-      y: 50,
-      width: 120,
-      height: 120,
-      rotation: 0,
-      zIndex: maxZIndex.current,
-    };
-    pushHistory(items);
-    setItems(prev => [...prev, newItem]);
-  }
+  const slotStyleToItemStyle = (slot: SlotData): React.CSSProperties => {
+    const style = slot.style ?? {};
+    const borderRadius = (style as React.CSSProperties).borderRadius;
+    const clipPath = (style as React.CSSProperties).clipPath as string | undefined;
+    const result: React.CSSProperties = {};
+    if (borderRadius) result.borderRadius = borderRadius;
+    if (clipPath) result.clipPath = clipPath;
+    return result;
+  };
 
-  // 共通のクリーンアップ
-  setShowSlotPickerMenu(false);
-  setSlotPickerTargetId(null);
-  setTargetSlotId(null);
-};
+  const handleSlotPickFromStock = (_stockIdx: 0 | 1 | 2, stockPhotoUrl: string) => {
+    maxZIndex.current += 1;
+
+    if (slotPickerTargetId) {
+      const slot = templateSlots.find(s => s.id === slotPickerTargetId);
+      if (!slot) return;
+      const clipShape = slotStyleToClipShape(slot);
+      
+      const newItem: CanvasItem = {
+        id: `photo-slot-${slot.id}-${Date.now()}`,
+        type: 'photo',
+        content: stockPhotoUrl,
+        originalImageUrl: stockPhotoUrl,
+        x: slot.x,
+        y: slot.y,
+        width: slot.width,
+        height: slot.height,
+        rotation: slot.rotation ?? 0,
+        zIndex: maxZIndex.current,
+        clipShape,
+      };
+      pushHistory(items);
+      setItems(prev => [...prev, newItem]);
+      setTemplateSlots(prev => prev.filter(s => s.id !== slotPickerTargetId));
+    } else {
+      const newItem: CanvasItem = {
+        id: `photo-direct-${Date.now()}`,
+        type: 'photo',
+        content: stockPhotoUrl,
+        originalImageUrl: stockPhotoUrl,
+        x: 50,
+        y: 50,
+        width: 120,
+        height: 120,
+        rotation: 0,
+        zIndex: maxZIndex.current,
+      };
+      pushHistory(items);
+      setItems(prev => [...prev, newItem]);
+    }
+
+    setShowSlotPickerMenu(false);
+    setSlotPickerTargetId(null);
+    setTargetSlotId(null);
+  };
 
   const handleItemRotate = useCallback((id: string, newRotation: number) => {
     setItems(prev => prev.map(i => i.id === id ? { ...i, rotation: newRotation } : i));
@@ -1654,8 +1572,7 @@ const handleSlotPickFromStock = (_stockIdx: 0 | 1 | 2, stockPhotoUrl: string) =>
       const item = items.find(i => i.id === replaceTargetId);
       if (!item) return;
       const url = ev.target?.result as string;
-      pendingOriginalUrl.current = url; // 差し替え時も元画像を保存
-      // 元のアイテムのサイズ・形状でクロップモーダルを開く
+      pendingOriginalUrl.current = url;
       const ratio = item.width / item.height;
       let shape: typeof cropInitialShape = undefined;
       if (item.clipShape === 'heart') shape = 'heart';
@@ -1685,12 +1602,10 @@ const handleSlotPickFromStock = (_stockIdx: 0 | 1 | 2, stockPhotoUrl: string) =>
     else if (ratio < 0.85) shape = 'rectangle';
     else shape = 'square';
     setCropInitialShape(shape);
-    // 元画像があればそちらを使う（より広い範囲でトリミングし直せる）
     setCropImageUrl(item.originalImageUrl ?? item.content);
     setTargetSlotId('__retrim__');
   };
 
-  // ストックへ複数枚追加（Exif日付付き）
   const handleStockFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     if (files.length === 0) return;
@@ -1715,68 +1630,24 @@ const handleSlotPickFromStock = (_stockIdx: 0 | 1 | 2, stockPhotoUrl: string) =>
     }
   };
 
-  // スロットのstyleからClipShapeを判定するヘルパー
-  const slotStyleToClipShape = (slot: SlotData): ClipShape | undefined => {
-    const style = slot.style ?? {};
-    const clipPath = (style as React.CSSProperties).clipPath as string | undefined;
-    if (!clipPath) return undefined;
-    if (clipPath.includes('50% 25%') || clipPath.includes('50% 15%')) return 'heart';
-    if (clipPath.includes('61.8%') || clipPath.includes('61% 35%')) return 'star';
-    if (clipPath.includes('75%, 75% 75%') || clipPath.includes('75% 75%')) return 'bubble';
-    return undefined;
-  };
-
-  // スロットのstyleからCanvasItemに適用するstyleを生成するヘルパー
-  const slotStyleToItemStyle = (slot: SlotData): React.CSSProperties => {
-    const style = slot.style ?? {};
-    const borderRadius = (style as React.CSSProperties).borderRadius;
-    const clipPath = (style as React.CSSProperties).clipPath as string | undefined;
-    const result: React.CSSProperties = {};
-    if (borderRadius) result.borderRadius = borderRadius;
-    if (clipPath) result.clipPath = clipPath;
-    return result;
-  };
-
-  // 枠を全部埋める（ストックからランダム）
-  // ストック選択後、空き枠の有無でモード確認ダイアログを出す
-  const handleFillStockSelected = (stockIdx: 0 | 1 | 2) => {
+const handleFillStockSelected = (stockIdx: 0 | 1 | 2) => {
     const photoStock = photoStocks[stockIdx];
     if (photoStock.length === 0) {
       alert(`ストック${stockIdx + 1}に写真がありません。先に写真を追加してください。`);
       return;
     }
-    // 空き枠があるかチェック（枠のIDに対応する写真アイテムが既にあるか）
-    const filledSlotIds = new Set(
-      items
-        .filter(item => item.type === 'photo')
-        .map(item => {
-          // id形式: photo-slot-{slotId}-{timestamp}-{i}
-          const m = item.id.match(/^photo-slot-(.+?)-\d+/);
-          return m ? m[1] : null;
-        })
-        .filter(Boolean)
-    );
-    const hasEmptySlot = templateSlots.some(slot => !filledSlotIds.has(slot.id));
 
     setPendingFillStockIdx(stockIdx);
     setShowFillStockPicker(false);
-    if (hasEmptySlot) {
-      // 空き枠あり → 選択ダイアログを出す
-      setShowFillModeDialog(true);
-    } else {
-      // すべて埋まっている → 直接「入れ替え」確認なしで実行
-      setShowFillModeDialog(true);
-    }
+    setShowFillModeDialog(true);
   };
 
-  // 実際に配置を行う（emptyOnly=trueで空き枠のみ、falseで全枠置換）
   const handleFillAllSlots = (stockIdx: 0 | 1 | 2, emptyOnly: boolean) => {
     const photoStock = photoStocks[stockIdx];
     if (photoStock.length === 0) return;
 
     const shuffled = [...photoStock].sort(() => Math.random() - 0.5);
 
-    // 写真枠（templateSlots）がない場合 → キャンバス上の既存 photo items を差し替え
     if (templateSlots.length === 0) {
       const photoItems = items.filter(item => item.type === 'photo');
       if (photoItems.length === 0) return;
@@ -1795,7 +1666,6 @@ const handleSlotPickFromStock = (_stockIdx: 0 | 1 | 2, stockPhotoUrl: string) =>
       return;
     }
 
-    // 空き枠の判定
     const filledSlotIds = new Set(
       items
         .filter(item => item.type === 'photo')
@@ -1833,7 +1703,7 @@ const handleSlotPickFromStock = (_stockIdx: 0 | 1 | 2, stockPhotoUrl: string) =>
           : {}),
       };
     });
-    // 全枠置換の場合：対象スロットに既存の写真があれば先に削除してから新しい写真を追加
+
     if (!emptyOnly) {
       const targetSlotIdSet = new Set(targetSlots.map(s => s.id));
       setItems(prev => [
@@ -1931,10 +1801,9 @@ const handleSlotPickFromStock = (_stockIdx: 0 | 1 | 2, stockPhotoUrl: string) =>
                 </div>
               </div>
 
-<div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ display: 'flex', gap: 8 }}>
                   {CUSTOM_SLOT_OPTIONS.map(opt => {
-                    // ここでロック対象（Pro以外でかつハートか星）かを判定
                     const isLocked = (opt.shape === 'heart' || opt.shape === 'star') && !isPro;
                     return (
                       <button
@@ -1945,8 +1814,8 @@ const handleSlotPickFromStock = (_stockIdx: 0 | 1 | 2, stockPhotoUrl: string) =>
                           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
                           background: 'none', border: 'none', cursor: customSelected.length < 6 ? 'pointer' : 'default',
                           padding: '4px 2px', minWidth: 44,
-                          opacity: isLocked ? 0.5 : 1, // ロック時は半透明に
-                          position: 'relative',        // ロックアイコンの位置基準
+                          opacity: isLocked ? 0.5 : 1,
+                          position: 'relative',
                         }}
                       >
                         <div style={{
@@ -1957,7 +1826,6 @@ const handleSlotPickFromStock = (_stockIdx: 0 | 1 | 2, stockPhotoUrl: string) =>
                           <div style={{ background: '#aaa', ...opt.thumbStyle }} />
                         </div>
                         <span style={{ fontSize: 10, color: '#555' }}>{opt.label}</span>
-                        {/* ロックされている場合だけ 🔒 を表示 */}
                         {isLocked && (
                           <span style={{
                             position: 'absolute', top: 2, right: 2,
@@ -1990,30 +1858,26 @@ const handleSlotPickFromStock = (_stockIdx: 0 | 1 | 2, stockPhotoUrl: string) =>
               </div>
             </div>
           );
-}
-  return (
-    <div className="template-list">
-      {TEMPLATES.map(t => (
-        <div key={t.id} className="template-item" onClick={() => applyTemplate(t)}>
-          <div className="template-thumb">
-            {t.id === 'circle' ? (
-              <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-                {/* 左上の大きめの丸 */}
-                <circle cx="9" cy="9" r="7" fill="currentColor" opacity="0.8" />
-                {/* 右上の小さな丸 */}
-                <circle cx="21" cy="7" r="4.5" fill="currentColor" opacity="0.6" />
-                {/* 左下の小さな丸 */}
-                <circle cx="6" cy="21" r="4.5" fill="currentColor" opacity="0.6" />
-                {/* 右下の大きめの丸 */}
-                <circle cx="19" cy="19" r="7" fill="currentColor" opacity="0.8" />
-              </svg>
-            ) : (
-              <LayoutTemplate size={26} />
-            )}
-          </div>
-          <span>{t.name}</span>
-        </div>
-      ))}
+        }
+        return (
+          <div className="template-list">
+            {TEMPLATES.map(t => (
+              <div key={t.id} className="template-item" onClick={() => applyTemplate(t)}>
+                <div className="template-thumb">
+                  {t.id === 'circle' ? (
+                    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="9" cy="9" r="7" fill="currentColor" opacity="0.8" />
+                      <circle cx="21" cy="7" r="4.5" fill="currentColor" opacity="0.6" />
+                      <circle cx="6" cy="21" r="4.5" fill="currentColor" opacity="0.6" />
+                      <circle cx="19" cy="19" r="7" fill="currentColor" opacity="0.8" />
+                    </svg>
+                  ) : (
+                    <LayoutTemplate size={26} />
+                  )}
+                </div>
+                <span>{t.name}</span>
+              </div>
+            ))}
             <div className="template-item" onClick={() => confirmAndApply(() => {
                 pushHistory(items);
                 setItems([]);
@@ -2037,97 +1901,94 @@ const handleSlotPickFromStock = (_stockIdx: 0 | 1 | 2, stockPhotoUrl: string) =>
           </div>
         );
 
-case 'text': {
-  // 1. 選択中のテキストアイテムがあるか特定
-  const editingTextItem = selectedId
-    ? items.find(i => i.id === selectedId && i.type === 'text') ?? null
-    : null;
+      case 'text': {
+        const editingTextItem = selectedId
+          ? items.find(i => i.id === selectedId && i.type === 'text') ?? null
+          : null;
 
-  // 2. 各変更ハンドラー：選択中アイテムがあれば履歴を保存して更新、なければ新規用Stateを更新
-  const handleTextColor = (c: string) => {
-    setTextColor(c);
-    if (editingTextItem) {
-      setItems(prev => prev.map(i => i.id === editingTextItem.id ? { ...i, color: c } : i));
-    }
-  };
+        const handleTextColor = (c: string) => {
+          setTextColor(c);
+          if (editingTextItem) {
+            setItems(prev => prev.map(i => i.id === editingTextItem.id ? { ...i, color: c } : i));
+          }
+        };
 
-  const handleFontSize = (s: number) => {
-    setFontSize(s);
-    if (editingTextItem) {
-      setItems(prev => prev.map(i => i.id === editingTextItem.id ? { ...i, fontSize: s } : i));
-    }
-  };
+        const handleFontSize = (s: number) => {
+          setFontSize(s);
+          if (editingTextItem) {
+            setItems(prev => prev.map(i => i.id === editingTextItem.id ? { ...i, fontSize: s } : i));
+          }
+        };
 
-  const handleFontFamily = (f: string) => {
-    setFontFamily(f);
-    if (editingTextItem) {
-      setItems(prev => prev.map(i => i.id === editingTextItem.id ? { ...i, fontFamily: f } : i));
-    }
-  };
+        const handleFontFamily = (f: string) => {
+          setFontFamily(f);
+          if (editingTextItem) {
+            setItems(prev => prev.map(i => i.id === editingTextItem.id ? { ...i, fontFamily: f } : i));
+          }
+        };
 
-  const handleTextStyle = (ts: TextStyleId) => {
-    setTextStyle(ts);
-    if (editingTextItem) {
-      setItems(prev => prev.map(i => i.id === editingTextItem.id ? { ...i, textStyle: ts } : i));
-    }
-  };
+        const handleTextStyle = (ts: TextStyleId) => {
+          setTextStyle(ts);
+          if (editingTextItem) {
+            setItems(prev => prev.map(i => i.id === editingTextItem.id ? { ...i, textStyle: ts } : i));
+          }
+        };
 
-  return (
-    <div className="text-menu-controls">
-      {editingTextItem ? (
-        <div style={{
-          fontSize: 11, color: 'var(--primary)', fontWeight: 'bold',
-          padding: '2px 4px 4px', textAlign: 'center',
-        }}>
-          ✏️ 選択中のテキストを編集中
-        </div>
-      ) : (
-        <input 
-          type="text" 
-          value={inputText} 
-          onChange={(e) => setInputText(e.target.value)} 
-          placeholder="文字を入力..." 
-          className="text-input" 
-          style={{ fontSize: 16 }} 
-        />
-      )}
-      
-      <div className="control-row">
-        <input type="color" value={textColor} onChange={(e) => handleTextColor(e.target.value)} />
-        <input type="range" min="12" max="100" value={fontSize} onChange={(e) => handleFontSize(parseInt(e.target.value))} />
-        <span style={{ fontSize: 12, minWidth: 30 }}>{fontSize}px</span>
+        return (
+          <div className="text-menu-controls">
+            {editingTextItem ? (
+              <div style={{
+                fontSize: 11, color: 'var(--primary)', fontWeight: 'bold',
+                padding: '2px 4px 4px', textAlign: 'center',
+              }}>
+                ✏️ 選択中のテキストを編集中
+              </div>
+            ) : (
+              <input 
+                type="text" 
+                value={inputText} 
+                onChange={(e) => setInputText(e.target.value)} 
+                placeholder="文字を入力..." 
+                className="text-input" 
+                style={{ fontSize: 16 }} 
+              />
+            )}
+            
+            <div className="control-row">
+              <input type="color" value={textColor} onChange={(e) => handleTextColor(e.target.value)} />
+              <input type="range" min="12" max="100" value={fontSize} onChange={(e) => handleFontSize(parseInt(e.target.value))} />
+              <span style={{ fontSize: 12, minWidth: 30 }}>{fontSize}px</span>
 
-        <select
-          value={fontFamily}
-          onChange={(e) => handleFontFamily(e.target.value)}
-          style={{
-            flex: 1, minWidth: 80, padding: '5px 4px', borderRadius: '6px',
-            border: '1px solid #ddd', fontSize: '12px', background: '#fff',
-            cursor: 'pointer', fontFamily: fontFamily
-          }}
-        >
-          {FONT_FAMILIES.map(f => (
-            <option key={f.name} value={f.name} style={{ fontFamily: f.name }}>
-              {f.label}
-            </option>
-          ))}
-        </select>
+              <select
+                value={fontFamily}
+                onChange={(e) => handleFontFamily(e.target.value)}
+                style={{
+                  flex: 1, minWidth: 80, padding: '5px 4px', borderRadius: '6px',
+                  border: '1px solid #ddd', fontSize: '12px', background: '#fff',
+                  cursor: 'pointer', fontFamily: fontFamily
+                }}
+              >
+                {FONT_FAMILIES.map(f => (
+                  <option key={f.name} value={f.name} style={{ fontFamily: f.name }}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
 
-        {/* 選択中でない時だけ追加ボタンを表示 */}
-        {!editingTextItem && (
-          <button 
-            onClick={() => { 
-              if (inputText.trim()) { 
-                addItem('text', inputText, { color: textColor, fontSize, textStyle, fontFamily }); 
-                setInputText(''); 
-              } 
-            }} 
-            className="add-btn"
-          >
-            追加
-          </button>
-        )}
-      </div>
+              {!editingTextItem && (
+                <button 
+                  onClick={() => { 
+                    if (inputText.trim()) { 
+                      addItem('text', inputText, { color: textColor, fontSize, textStyle, fontFamily }); 
+                      setInputText(''); 
+                    } 
+                  }} 
+                  className="add-btn"
+                >
+                  追加
+                </button>
+              )}
+            </div>
             <div className="text-style-row">
               {TEXT_STYLES.map(ts => (
                 <button
@@ -2169,7 +2030,9 @@ case 'text': {
     }
   };
 
-<header className="header">
+  return (
+    <div className="app-container">
+      <header className="header">
         <button className="header-btn back-btn" onClick={undo} disabled={history.length === 0}>
           <Undo2 size={18} />
           <span>戻る</span>
@@ -2180,17 +2043,14 @@ case 'text': {
         </button>
       </header>
 
-      {/* ここに追加 */}
       {!isPro && <AdBanner />}
 
       <main className="canvas-area" onClick={() => { setSelectedId(null); setPhotoSubMenuId(null); setPhotoSubMenuPos(null); setItemSubMenuId(null); setItemSubMenuPos(null); setActiveMainTab(null); setShowPhotoAddMenu(false); }}>
-
         <div
           ref={canvasRef}
           className="album-canvas"
           style={{ width: CANVAS_W, height: CANVAS_H, ...getCanvasBgStyle(canvasBg) }}
         >
-          {/* 写真背景の薄さオーバーレイ */}
           {canvasBg.bgPhotoUrl && (canvasBg.bgPhotoOpacity ?? 1) < 1 && (
             <div style={{
               position: 'absolute', inset: 0,
@@ -2199,7 +2059,6 @@ case 'text': {
               zIndex: 0,
             }} />
           )}
-          {/* SVGパターンオーバーレイ（格子・水玉・ストライプ・星） */}
           {!canvasBg.bgImage && canvasBg.patternType !== 'solid' && canvasBg.patternType !== 'gradient' && (
             <BgPatternSvg patternType={canvasBg.patternType} color={canvasBg.color} color2={canvasBg.color2} width={CANVAS_W} height={CANVAS_H} />
           )}
@@ -2248,9 +2107,7 @@ case 'text': {
                 style={{ zIndex: item.zIndex }}
                 dragHandleClassName="drag-handle"
                 enableResizing={isSelected ? undefined : false}
-                resizeHandleStyles={isSelected ? {
-                  topLeft: { display: 'none' },
-                } : {}}
+                resizeHandleStyles={isSelected ? { topLeft: { display: 'none' } } : {}}
                 resizeHandleComponent={isSelected ? {
                   bottomRight: (
                     <div
@@ -2294,7 +2151,7 @@ case 'text': {
                     const el = e.currentTarget as HTMLElement;
                     const dx = Math.abs(e.clientX - Number(el.dataset.pointerDownX ?? e.clientX));
                     const dy = Math.abs(e.clientY - Number(el.dataset.pointerDownY ?? e.clientY));
-                    if (dx > 8 || dy > 8) return; // ドラッグは無視
+                    if (dx > 8 || dy > 8) return;
                     setSelectedId(item.id);
                     const canvasEl = canvasRef.current;
                     const getMenuPos = () => {
@@ -2314,25 +2171,17 @@ case 'text': {
                         setPhotoSubMenuId(item.id);
                         setPhotoSubMenuPos(getMenuPos());
                       }
-
-} else if (item.type === 'text') {
-  setPhotoSubMenuId(null);
-  setPhotoSubMenuPos(null);
-  setItemSubMenuId(null);
-  setItemSubMenuPos(null);
-  
-  // 1. タブをテキストに切り替える
-  setActiveMainTab('text');
-  
-  // 2. タップしたアイテムの現在の設定を、メニューのStateに同期させる
-  // これにより、スライダーやカラーピッカーが「そのアイテムの値」にセットされます
-  setTextColor(item.color ?? '#333333');
-  setFontSize(item.fontSize ?? 36);
-  setTextStyle(item.textStyle ?? 'normal');
-  setFontFamily(item.fontFamily ?? 'sans-serif');
-}
-
- else if (item.type === 'stamp') {
+                    } else if (item.type === 'text') {
+                      setPhotoSubMenuId(null);
+                      setPhotoSubMenuPos(null);
+                      setItemSubMenuId(null);
+                      setItemSubMenuPos(null);
+                      setActiveMainTab('text');
+                      setTextColor(item.color ?? '#333333');
+                      setFontSize(item.fontSize ?? 36);
+                      setTextStyle(item.textStyle ?? 'normal');
+                      setFontFamily(item.fontFamily ?? 'sans-serif');
+                    } else if (item.type === 'stamp') {
                       if (itemSubMenuId === item.id) {
                         setItemSubMenuId(null);
                         setItemSubMenuPos(null);
@@ -2365,21 +2214,21 @@ case 'text': {
                               styleId={sid!}
                               width={item.width}
                               height={item.height}
-fontFamily={item.fontFamily ?? 'sans-serif'}
+                              fontFamily={item.fontFamily ?? 'sans-serif'}
                             />
                           </div>
                         );
                       }
                       return (
-<div
-  className="item-text drag-handle"
-  style={{ 
-    ...getTextCssStyle(sid, item.color ?? '#333333', item.fontFamily ?? 'sans-serif'), // ← 引数追加
-    fontSize: `${item.fontSize}px` 
-  }}
->
-  {item.content}
-</div>
+                        <div
+                          className="item-text drag-handle"
+                          style={{ 
+                            ...getTextCssStyle(sid, item.color ?? '#333333', item.fontFamily ?? 'sans-serif'),
+                            fontSize: `${item.fontSize}px` 
+                          }}
+                        >
+                          {item.content}
+                        </div>
                       );
                     })()
                   ) : item.type === 'stamp' ? (
@@ -2416,8 +2265,6 @@ fontFamily={item.fontFamily ?? 'sans-serif'}
                   </button>
                 )}
 
-                {/* 写真サブメニュー: position:fixed のオーバーレイとして外部で描画するため、ここでは不要 */}
-
                 {isSelected && (
                   <RotateHandle
                     itemId={item.id}
@@ -2436,12 +2283,10 @@ fontFamily={item.fontFamily ?? 'sans-serif'}
         </div>
       </main>
 
-      {/* 写真サブメニュー: position:fixed オーバーレイ（背面・画面端でも必ず表示） */}
       {photoSubMenuId && photoSubMenuPos && (() => {
         const subItem = items.find(i => i.id === photoSubMenuId);
         if (!subItem) return null;
-        // 画面下端からはみ出ないよう補正
-        const MENU_H = 4 * 44; // 4項目 × 約44px
+        const MENU_H = 4 * 44;
         const winH = window.innerHeight;
         const top = photoSubMenuPos.y + MENU_H > winH - 60
           ? photoSubMenuPos.y - MENU_H - subItem.height - 16
@@ -2504,7 +2349,6 @@ fontFamily={item.fontFamily ?? 'sans-serif'}
         );
       })()}
 
-      {/* スタンプ・テキストサブメニュー: position:fixed オーバーレイ */}
       {itemSubMenuId && itemSubMenuPos && (() => {
         const subItem = items.find(i => i.id === itemSubMenuId);
         if (!subItem) return null;
@@ -2569,31 +2413,27 @@ fontFamily={item.fontFamily ?? 'sans-serif'}
         );
       })()}
 
-
-<nav className="bottom-menu">
+      <nav className="bottom-menu">
         {activeMainTab !== null && (
           <div className="sub-menu" style={
             activeMainTab === 'template' && customPicking ? { height: 180 }
             : activeMainTab === 'text' ? { height: 160 }
-: activeMainTab === 'background' ? { height: 'auto' }
+            : activeMainTab === 'background' ? { height: 'auto' }
             : undefined
           }>
             {renderSubMenu()}
           </div>
         )}
         <div className="main-tabs">
-
-{/* 1. 背景変更を一番左に移動 */}
-<button className={`tab-btn ${activeMainTab === 'background' ? 'active' : ''}`} onClick={() => handleTabToggle('background')}>
+          <button className={`tab-btn ${activeMainTab === 'background' ? 'active' : ''}`} onClick={() => handleTabToggle('background')}>
             <Grid size={22} /><span>背景変更</span>
           </button>
 
-  {/* 2. 写真枠配置を左から二番目に移動 */}
-<button className={`tab-btn ${activeMainTab === 'template' ? 'active' : ''}`} onClick={() => handleTabToggle('template')}>
+          <button className={`tab-btn ${activeMainTab === 'template' ? 'active' : ''}`} onClick={() => handleTabToggle('template')}>
             <LayoutTemplate size={22} /><span>写真枠配置</span>
           </button>
 
-<div style={{ position: 'relative', display: 'contents' }}>
+          <div style={{ position: 'relative', display: 'contents' }}>
             <button
               className={`tab-btn ${showPhotoAddMenu ? 'active' : ''}`}
               onClick={(e) => { e.stopPropagation(); setShowPhotoAddMenu(prev => !prev); setActiveMainTab(null); }}
@@ -2601,138 +2441,132 @@ fontFamily={item.fontFamily ?? 'sans-serif'}
               <ImagePlus size={22} /><span>写真追加</span>
             </button>
 
-{/* 修正後の「写真追加」サブメニュー部分 */}
-{showPhotoAddMenu && (
-  <div
-    className="sub-menu"
-    onClick={e => e.stopPropagation()}
-    style={{
-      height: 'auto',
-      maxHeight: '180px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '0', // 境界線で分けるため0に
-      padding: '0',
-      overflowX: 'hidden'
-    }}
-  >
-    {/* 1枚追加ボタン */}
-    <button
-      onPointerDown={e => e.stopPropagation()}
-      onClick={() => { 
-        setTargetSlotId(null);
-        setSlotPickerTargetId(null);
-        setShowSlotPickerMenu(true);
-        setShowPhotoAddMenu(false);
-      }}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 12,
-        width: '100%', padding: '12px 16px',
-        background: 'transparent', border: 'none',
-        borderBottom: '1px solid #eee',
-        color: '#333', fontSize: 13, fontWeight: 600,
-        cursor: 'pointer', textAlign: 'left',
-      }}
-    >
-      <span style={{ fontSize: 18, minWidth: 24 }}>📷</span>
-      <div>
-        <div>１枚追加</div>
-        <div style={{ fontSize: 10, color: '#888', fontWeight: 400 }}>写真を選んでキャンバスに追加</div>
-      </div>
-    </button>
+            {showPhotoAddMenu && (
+              <div
+                className="sub-menu"
+                onClick={e => e.stopPropagation()}
+                style={{
+                  height: 'auto',
+                  maxHeight: '180px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0',
+                  padding: '0',
+                  overflowX: 'hidden'
+                }}
+              >
+                <button
+                  onPointerDown={e => e.stopPropagation()}
+                  onClick={() => { 
+                    setTargetSlotId(null);
+                    setSlotPickerTargetId(null);
+                    setShowSlotPickerMenu(true);
+                    setShowPhotoAddMenu(false);
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    width: '100%', padding: '12px 16px',
+                    background: 'transparent', border: 'none',
+                    borderBottom: '1px solid #eee',
+                    color: '#333', fontSize: 13, fontWeight: 600,
+                    cursor: 'pointer', textAlign: 'left',
+                  }}
+                >
+                  <span style={{ fontSize: 18, minWidth: 24 }}>📷</span>
+                  <div>
+                    <div>１枚追加</div>
+                    <div style={{ fontSize: 10, color: '#888', fontWeight: 400 }}>写真を選んでキャンバスに追加</div>
+                  </div>
+                </button>
 
-    {/* ストック管理ボタン */}
-    <button
-      onPointerDown={e => e.stopPropagation()}
-      onClick={() => { 
-        setStockDeleteSelected(new Set()); 
-        setShowStockOrganizer(true); 
-      }}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 12,
-        width: '100%', padding: '12px 16px',
-        background: 'transparent', border: 'none',
-        borderBottom: '1px solid #eee',
-        color: '#333', fontSize: 13, fontWeight: 600,
-        cursor: 'pointer', textAlign: 'left',
-      }}
-    >
-      <span style={{ fontSize: 18, minWidth: 24 }}>🗂️</span>
-      <div>
-        <div>ストックを管理する</div>
-        <div style={{ fontSize: 10, color: '#aaa', fontWeight: 400 }}>ストックの写真を追加・削除</div>
-        <div style={{ fontSize: 9, color: '#f26b9a', fontWeight: 400, marginTop: 2 }}>
-          {`〔ストック１〕：${photoStocks[0].length}枚、〔ストック２〕：${photoStocks[1].length}枚、〔ストック３〕：${photoStocks[2].length}枚`}
-        </div>
-      </div>
-    </button>
+                <button
+                  onPointerDown={e => e.stopPropagation()}
+                  onClick={() => { 
+                    setStockDeleteSelected(new Set()); 
+                    setShowStockOrganizer(true); 
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    width: '100%', padding: '12px 16px',
+                    background: 'transparent', border: 'none',
+                    borderBottom: '1px solid #eee',
+                    color: '#333', fontSize: 13, fontWeight: 600,
+                    cursor: 'pointer', textAlign: 'left',
+                  }}
+                >
+                  <span style={{ fontSize: 18, minWidth: 24 }}>🗂️</span>
+                  <div>
+                    <div>ストックを管理する</div>
+                    <div style={{ fontSize: 10, color: '#aaa', fontWeight: 400 }}>ストックの写真を追加・削除</div>
+                    <div style={{ fontSize: 9, color: '#f26b9a', fontWeight: 400, marginTop: 2 }}>
+                      {`〔ストック１〕：${photoStocks[0].length}枚、〔ストック２〕：${photoStocks[1].length}枚、〔ストック３〕：${photoStocks[2].length}枚`}
+                    </div>
+                  </div>
+                </button>
 
-    {/* ランダム配置ボタン */}
-    {(() => {
-      const anyStockHasPhotos = photoStocks.some(s => s.length > 0);
-      // ストックに写真があれば（枠が空でなくても）ボタンは押せる
-const canOpen = anyStockHasPhotos;
-      return (
-        <button
-          onPointerDown={e => e.stopPropagation()}
-          onClick={() => {
-            if (!canOpen) return;
-            setShowFillStockPicker(true);
-            setShowPhotoAddMenu(false);
-          }}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 12,
-            width: '100%', padding: '12px 16px',
-            background: canOpen ? '#fff5f8' : 'transparent',
-            border: 'none',
-            color: canOpen ? 'var(--primary)' : '#ccc',
-            fontSize: 13, fontWeight: 600,
-            cursor: canOpen ? 'pointer' : 'default',
-            textAlign: 'left',
-          }}
-        >
-          <span style={{ fontSize: 18, minWidth: 24 }}>🎲</span>
-          <div>
-            <div>ストックから枠にランダムで入れる</div>
-            <div style={{ fontSize: 10, fontWeight: 400, color: (!anyStockHasPhotos || templateSlots.length === 0) ? '#ff6b6b' : '#aaa' }}>
-              {!anyStockHasPhotos
-                ? 'ストックに写真がありません'
-                : templateSlots.length === 0
-                  ? '写真枠がありません'
-                  : 'ストックを選んで配置'}
-            </div>
-          </div>
-        </button>
-      );
-    })()}
+                {(() => {
+                  const anyStockHasPhotos = photoStocks.some(s => s.length > 0);
+                  const canOpen = anyStockHasPhotos;
+                  return (
+                    <button
+                      onPointerDown={e => e.stopPropagation()}
+                      onClick={() => {
+                        if (!canOpen) return;
+                        setShowFillStockPicker(true);
+                        setShowPhotoAddMenu(false);
+                      }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 12,
+                        width: '100%', padding: '12px 16px',
+                        background: canOpen ? '#fff5f8' : 'transparent',
+                        border: 'none',
+                        color: canOpen ? 'var(--primary)' : '#ccc',
+                        fontSize: 13, fontWeight: 600,
+                        cursor: canOpen ? 'pointer' : 'default',
+                        textAlign: 'left',
+                      }}
+                    >
+                      <span style={{ fontSize: 18, minWidth: 24 }}>🎲</span>
+                      <div>
+                        <div>ストックから枠にランダムで入れる</div>
+                        <div style={{ fontSize: 10, fontWeight: 400, color: (!anyStockHasPhotos || templateSlots.length === 0) ? '#ff6b6b' : '#aaa' }}>
+                          {!anyStockHasPhotos
+                            ? 'ストックに写真がありません'
+                            : templateSlots.length === 0
+                              ? '写真枠がありません'
+                              : 'ストックを選んで配置'}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })()}
 
-    {/* 全ストック消去 */}
-    {photoStocks.some(s => s.length > 0) && (
-      <button
-        onPointerDown={e => e.stopPropagation()}
-        onClick={() => { 
-          if(window.confirm('すべてのストック写真を消去しますか？')) {
-            setPhotoStocks([[], [], []]); 
-            setShowPhotoAddMenu(false); 
-          }
-        }}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 10,
-          width: '100%', padding: '10px 16px',
-          background: 'transparent', border: 'none',
-          color: '#ff7070', fontSize: 12, fontWeight: 500,
-          cursor: 'pointer', textAlign: 'left',
-        }}
-      >
-        <span style={{ fontSize: 16, minWidth: 24 }}>🗑️</span>
-        <div>全ストックを消す</div>
-      </button>
-    )}
-  </div>
-)}
+                {photoStocks.some(s => s.length > 0) && (
+                  <button
+                    onPointerDown={e => e.stopPropagation()}
+                    onClick={() => { 
+                      if(window.confirm('すべてのストック写真を消去しますか？')) {
+                        setPhotoStocks([[], [], []]); 
+                        setShowPhotoAddMenu(false); 
+                      }
+                    }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      width: '100%', padding: '10px 16px',
+                      background: 'transparent', border: 'none',
+                      color: '#ff7070', fontSize: 12, fontWeight: 500,
+                      cursor: 'pointer', textAlign: 'left',
+                    }}
+                  >
+                    <span style={{ fontSize: 16, minWidth: 24 }}>🗑️</span>
+                    <div>全ストックを消す</div>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
-<button className={`tab-btn ${activeMainTab === 'stamp' ? 'active' : ''}`} onClick={() => handleTabToggle('stamp')}>
+          <button className={`tab-btn ${activeMainTab === 'stamp' ? 'active' : ''}`} onClick={() => handleTabToggle('stamp')}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 2a5 5 0 0 1 5 5c0 2-1 3.5-2.5 4.5V13h-5v-1.5C8 10.5 7 9 7 7a5 5 0 0 1 5-5z"/>
               <rect x="7" y="13" width="10" height="3" rx="1"/>
@@ -2766,16 +2600,14 @@ const canOpen = anyStockHasPhotos;
 
       {/* ===== 日付フィルタモーダル ===== */}
       {showDateFilter && (() => {
-        // フィルタ適用後の枚数をプレビュー
         const from = dateFilterFrom ? new Date(dateFilterFrom) : null;
         const to = dateFilterTo ? new Date(dateFilterTo + 'T23:59:59') : null;
         const filtered = pendingStockPhotos.filter(p => {
-          if (!p.takenAt) return true; // 日付不明は通す
+          if (!p.takenAt) return true;
           if (from && p.takenAt < from) return false;
           if (to && p.takenAt > to) return false;
           return true;
         });
-        // 月ごとの件数サマリー
         const monthMap: Record<string, number> = {};
         pendingStockPhotos.forEach(p => {
           if (!p.takenAt) return;
@@ -2814,12 +2646,7 @@ const canOpen = anyStockHasPhotos;
                 display: 'flex', flexDirection: 'column',
               }}
             >
-              {/* ヘッダー */}
-              <div style={{
-                padding: '14px 16px 10px',
-                borderBottom: '1px solid rgba(255,255,255,0.1)',
-                flexShrink: 0,
-              }}>
+              <div style={{ padding: '14px 16px 10px', borderBottom: '1px solid rgba(255,255,255,0.1)', flexShrink: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
                   <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>📅 日付で絞り込む</span>
                   <button
@@ -2841,7 +2668,6 @@ const canOpen = anyStockHasPhotos;
               </div>
 
               <div style={{ overflowY: 'auto', flex: 1 }}>
-                {/* 月ごとサマリー */}
                 {monthEntries.length > 0 && (
                   <div style={{ padding: '10px 16px 6px' }}>
                     <div style={{ fontSize: 11, color: '#888', marginBottom: 6 }}>📊 写真の内訳</div>
@@ -2850,7 +2676,6 @@ const canOpen = anyStockHasPhotos;
                         <button
                           key={month}
                           onClick={() => {
-                            // その月全体を範囲にセット
                             const m = month.match(/(\d+)年(\d+)月/);
                             if (!m) return;
                             const y = parseInt(m[1]), mo = parseInt(m[2]);
@@ -2879,9 +2704,8 @@ const canOpen = anyStockHasPhotos;
                   </div>
                 )}
 
-                {/* 日付範囲指定 */}
                 <div style={{ padding: '10px 16px' }}>
-                  <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>📆 期間を指定</div>
+                  <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}><code>`📆 期間を指定`</code></div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 10, color: '#aaa', marginBottom: 3 }}>開始日</div>
@@ -2913,7 +2737,6 @@ const canOpen = anyStockHasPhotos;
                       />
                     </div>
                   </div>
-                  {/* クイック選択ボタン */}
                   <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
                     {[
                       { label: '今月', fn: () => {
@@ -2960,7 +2783,6 @@ const canOpen = anyStockHasPhotos;
                   </div>
                 </div>
 
-                {/* フィルタ結果プレビュー（サムネイル） */}
                 <div style={{ padding: '4px 16px 12px' }}>
                   <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>
                     🖼️ 絞り込み結果: <span style={{ color: filtered.length > 0 ? '#f26b9a' : '#666', fontWeight: 700 }}>{filtered.length}枚</span>
@@ -2969,30 +2791,21 @@ const canOpen = anyStockHasPhotos;
                     )}
                   </div>
                   {filtered.length > 0 ? (
-                    <div style={{
-                      display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 5,
-                      maxHeight: 140, overflowY: 'auto',
-                    }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 5, maxHeight: 140, overflowY: 'auto' }}>
                       {filtered.slice(0, 20).map((p, i) => (
                         <div key={i} style={{ aspectRatio: '1/1', borderRadius: 6, overflow: 'hidden', position: 'relative' }}>
                           <img src={p.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                           {p.takenAt && (
-                            <div style={{
-                              position: 'absolute', bottom: 0, left: 0, right: 0,
-                              background: 'rgba(0,0,0,0.6)', fontSize: 7, color: '#ddd',
-                              padding: '1px 3px', textAlign: 'center',
-                            }}>
+                            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.6)', fontSize: 7, color: '#ddd', padding: '1px 3px', textAlign: 'center' }}>
                               {p.takenAt.getMonth()+1}/{p.takenAt.getDate()}
                             </div>
                           )}
                         </div>
                       ))}
                       {filtered.length > 20 && (
-                        <div style={{
-                          aspectRatio: '1/1', borderRadius: 6, background: '#2a2a2a',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: 11, color: '#888',
-                        }}>+{filtered.length - 20}</div>
+                        <div style={{ aspectRatio: '1/1', borderRadius: 6, background: '#2a2a2a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#888' }}>
+                          +{filtered.length - 20}
+                        </div>
                       )}
                     </div>
                   ) : (
@@ -3003,20 +2816,10 @@ const canOpen = anyStockHasPhotos;
                 </div>
               </div>
 
-              {/* フッターボタン */}
-              <div style={{
-                padding: '12px 16px', flexShrink: 0,
-                borderTop: '1px solid rgba(255,255,255,0.08)',
-                display: 'flex', gap: 8,
-              }}>
+              <div style={{ padding: '12px 16px', flexShrink: 0, borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', gap: 8 }}>
                 <button
                   onClick={() => { setPendingStockPhotos([]); setShowDateFilter(false); }}
-                  style={{
-                    flex: 1, padding: '11px', borderRadius: 10,
-                    border: '1px solid rgba(255,255,255,0.15)',
-                    background: 'transparent', color: '#aaa',
-                    fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                  }}
+                  style={{ flex: 1, padding: '11px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', color: '#aaa', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
                 >キャンセル</button>
                 <button
                   disabled={filtered.length === 0}
@@ -3029,12 +2832,7 @@ const canOpen = anyStockHasPhotos;
                     setPendingStockPhotos([]);
                     setShowDateFilter(false);
                   }}
-                  style={{
-                    flex: 2, padding: '11px', borderRadius: 10, border: 'none',
-                    background: filtered.length > 0 ? '#f26b9a' : '#444',
-                    color: '#fff', fontSize: 13, fontWeight: 700,
-                    cursor: filtered.length > 0 ? 'pointer' : 'default',
-                  }}
+                  style={{ flex: 2, padding: '11px', borderRadius: 10, border: 'none', background: filtered.length > 0 ? '#f26b9a' : '#444', color: '#fff', fontSize: 13, fontWeight: 700, cursor: filtered.length > 0 ? 'pointer' : 'default' }}
                 >
                   {filtered.length}枚をストック{activeStockIndex + 1}に追加
                 </button>
@@ -3044,7 +2842,7 @@ const canOpen = anyStockHasPhotos;
         );
       })()}
 
-      {/* ===== ストック整理モーダル（3ストック対応） ===== */}
+      {/* ===== ストック整理モーダル ===== */}
       {showStockOrganizer && (() => {
         const photoStock = photoStocks[activeStockIndex];
         const stockColors: string[] = ['#f26b9a', '#4caf7d', '#5b9bd5'];
@@ -3053,43 +2851,15 @@ const canOpen = anyStockHasPhotos;
         return (
           <div
             onClick={() => setShowStockOrganizer(false)}
-            style={{
-              position: 'fixed', inset: 0,
-              background: 'rgba(0,0,0,0.75)',
-              zIndex: 10001,
-              display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-            }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10001, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
           >
-            <div
-              onClick={e => e.stopPropagation()}
-              style={{
-                width: '100%', maxWidth: 500,
-                background: '#1e1e1e',
-                borderRadius: '16px 16px 0 0',
-                paddingBottom: 'env(safe-area-inset-bottom)',
-                maxHeight: '85dvh',
-                display: 'flex', flexDirection: 'column',
-              }}
-            >
-              {/* ヘッダー */}
-              <div style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '14px 16px 10px',
-                borderBottom: '1px solid rgba(255,255,255,0.1)',
-                flexShrink: 0,
-              }}>
+            <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 500, background: '#1e1e1e', borderRadius: '16px 16px 0 0', paddingBottom: 'env(safe-area-inset-bottom)', maxHeight: '85dvh', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 10px', borderBottom: '1px solid rgba(255,255,255,0.1)', flexShrink: 0 }}>
                 <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>ストックを整理する</span>
-                <button
-                  onClick={() => setShowStockOrganizer(false)}
-                  style={{ background: 'none', border: 'none', color: '#aaa', fontSize: 20, cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}
-                >✕</button>
+                <button onClick={() => setShowStockOrganizer(false)} style={{ background: 'none', border: 'none', color: '#aaa', fontSize: 20, cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}>✕</button>
               </div>
 
-              {/* ストック切替タブ */}
-              <div style={{
-                display: 'flex', gap: 0, flexShrink: 0,
-                borderBottom: '1px solid rgba(255,255,255,0.08)',
-              }}>
+              <div style={{ display: 'flex', gap: 0, flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
                 {([0, 1, 2] as const).map(idx => {
                   const isActive = activeStockIndex === idx;
                   const cnt = photoStocks[idx].length;
@@ -3098,15 +2868,7 @@ const canOpen = anyStockHasPhotos;
                     <button
                       key={idx}
                       onClick={() => { setActiveStockIndex(idx); setStockDeleteSelected(new Set()); }}
-                      style={{
-                        flex: 1, padding: '10px 4px 8px',
-                        background: isActive ? 'rgba(255,255,255,0.06)' : 'transparent',
-                        border: 'none',
-                        borderBottom: isActive ? `2.5px solid ${color}` : '2.5px solid transparent',
-                        color: isActive ? '#fff' : '#888',
-                        fontSize: 12, fontWeight: isActive ? 700 : 400,
-                        cursor: 'pointer',
-                      }}
+                      style={{ flex: 1, padding: '10px 4px 8px', background: isActive ? 'rgba(255,255,255,0.06)' : 'transparent', border: 'none', borderBottom: isActive ? `2.5px solid ${color}` : '2.5px solid transparent', color: isActive ? '#fff' : '#888', fontSize: 12, fontWeight: isActive ? 700 : 400, cursor: 'pointer' }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
                         <span>{stockEmojis[idx]}</span>
@@ -3118,22 +2880,10 @@ const canOpen = anyStockHasPhotos;
                 })}
               </div>
 
-              {/* 操作バー */}
-              <div style={{
-                display: 'flex', gap: 8, padding: '10px 14px',
-                borderBottom: '1px solid rgba(255,255,255,0.08)',
-                flexShrink: 0, alignItems: 'center', flexWrap: 'wrap',
-justifyContent: 'center', // ← ここを追加して中央寄せにします
-              }}>
+              <div style={{ display: 'flex', gap: 8, padding: '10px 14px', borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
                 <button
                   onClick={() => document.getElementById('photo-stock-add-organizer')?.click()}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 5,
-                    padding: '7px 12px', borderRadius: 8,
-                    border: `1.5px dashed ${stockColor}99`,
-                    background: `${stockColor}1a`,
-                    color: stockColor, fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0,
-                  }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 12px', borderRadius: 8, border: `1.5px dashed ${stockColor}99`, background: `${stockColor}1a`, color: stockColor, fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}
                 >＋ 写真を追加</button>
                 <button
                   onClick={() => {
@@ -3143,12 +2893,7 @@ justifyContent: 'center', // ← ここを追加して中央寄せにします
                       setStockDeleteSelected(new Set(photoStock.map((_, i) => i)));
                     }
                   }}
-                  style={{
-                    padding: '7px 12px', borderRadius: 8,
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    background: 'transparent',
-                    color: '#ccc', fontSize: 12, cursor: 'pointer', flexShrink: 0,
-                  }}
+                  style={{ padding: '7px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.2)', background: 'transparent', color: '#ccc', fontSize: 12, cursor: 'pointer', flexShrink: 0 }}
                 >
                   {stockDeleteSelected.size === photoStock.length && photoStock.length > 0 ? '全解除' : '全選択'}
                 </button>
@@ -3162,12 +2907,7 @@ justifyContent: 'center', // ← ここを追加して中央寄せにします
                       });
                       setStockDeleteSelected(new Set());
                     }}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 5,
-                      marginLeft: '8px', padding: '7px 12px', borderRadius: 8,
-                      border: 'none', background: 'rgba(220,60,60,0.85)',
-                      color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0,
-                    }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 5, marginLeft: '8px', padding: '7px 12px', borderRadius: 8, border: 'none', background: 'rgba(220,60,60,0.85)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}
                   >🗑️ {stockDeleteSelected.size}枚削除</button>
                 )}
                 {photoStock.length > 0 && stockDeleteSelected.size === 0 && (
@@ -3180,16 +2920,11 @@ justifyContent: 'center', // ← ここを追加して中央寄せにします
                         return next;
                       });
                     }}
-                    style={{
-                      marginLeft: 'auto', padding: '7px 10px', borderRadius: 8,
-                      border: 'none', background: 'rgba(180,40,40,0.5)',
-                      color: '#ff9090', fontSize: 11, cursor: 'pointer', flexShrink: 0,
-                    }}
+                    style={{ marginLeft: 'auto', padding: '7px 10px', borderRadius: 8, border: 'none', background: 'rgba(180,40,40,0.5)', color: '#ff9090', fontSize: 11, cursor: 'pointer', flexShrink: 0 }}
                   >このストックを空にする</button>
                 )}
               </div>
 
-              {/* サムネイルグリッド（日付グループ表示） */}
               <div style={{ overflowY: 'auto', padding: '10px 12px', flex: 1 }}>
                 {(() => {
                   type Group = { label: string; indices: number[] };
@@ -3217,10 +2952,7 @@ justifyContent: 'center', // ← ここを追加して中央寄せにします
 
                   return groups.map(group => (
                     <div key={group.label} style={{ marginBottom: 14 }}>
-                      <div style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        marginBottom: 6,
-                      }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                         <span style={{ fontSize: 11, color: '#aaa', fontWeight: 600 }}>{group.label}</span>
                         <button
                           onClick={() => {
@@ -3232,17 +2964,12 @@ justifyContent: 'center', // ← ここを追加して中央寄せにします
                               return next;
                             });
                           }}
-                          style={{
-                            fontSize: 10, color: '#888', background: 'none',
-                            border: 'none', cursor: 'pointer', padding: '2px 6px',
-                          }}
+                          style={{ fontSize: 10, color: '#888', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px' }}
                         >
                           {group.indices.every(i => stockDeleteSelected.has(i)) ? '解除' : 'この日を選択'}
                         </button>
                       </div>
-                      <div style={{
-                        display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6,
-                      }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
                         {group.indices.map(idx => {
                           const p = photoStock[idx];
                           const checked = stockDeleteSelected.has(idx);
@@ -3254,22 +2981,10 @@ justifyContent: 'center', // ← ここを追加して中央寄せにします
                                 if (next.has(idx)) next.delete(idx); else next.add(idx);
                                 return next;
                               })}
-                              style={{
-                                position: 'relative', aspectRatio: '1/1',
-                                borderRadius: 8, overflow: 'hidden',
-                                border: checked ? `2.5px solid ${stockColor}` : '2px solid rgba(255,255,255,0.07)',
-                                cursor: 'pointer', transition: 'border-color 0.12s',
-                              }}
+                              style={{ position: 'relative', aspectRatio: '1/1', borderRadius: 8, overflow: 'hidden', border: checked ? `2.5px solid ${stockColor}` : '2px solid rgba(255,255,255,0.07)', cursor: 'pointer', transition: 'border-color 0.12s' }}
                             >
                               <img src={p.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                              <div style={{
-                                position: 'absolute', top: 5, right: 5,
-                                width: 20, height: 20, borderRadius: '50%',
-                                background: checked ? stockColor : 'rgba(0,0,0,0.45)',
-                                border: `2px solid ${checked ? '#fff' : 'rgba(255,255,255,0.5)'}`,
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                transition: 'background 0.12s',
-                              }}>
+                              <div style={{ position: 'absolute', top: 5, right: 5, width: 20, height: 20, borderRadius: '50%', background: checked ? stockColor : 'rgba(0,0,0,0.45)', border: `2px solid ${checked ? '#fff' : 'rgba(255,255,255,0.5)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.12s' }}>
                                 {checked && (
                                   <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                                     <path d="M1.5 5 L4 7.5 L8.5 2.5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
@@ -3285,19 +3000,8 @@ justifyContent: 'center', // ← ここを追加して中央寄せにします
                 })()}
               </div>
 
-              {/* フッター */}
-              <div style={{
-                padding: '12px 16px', flexShrink: 0,
-                borderTop: '1px solid rgba(255,255,255,0.08)',
-              }}>
-                <button
-                  onClick={() => { setStockDeleteSelected(new Set()); setShowStockOrganizer(false); }}
-                  style={{
-                    width: '100%', padding: '12px', borderRadius: 10, border: 'none',
-                    background: '#3b4f7a', color: '#fff',
-                    fontSize: 14, fontWeight: 700, cursor: 'pointer',
-                  }}
-                >　完了</button>
+              <div style={{ padding: '12px 16px', flexShrink: 0, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                <button onClick={() => { setStockDeleteSelected(new Set()); setShowStockOrganizer(false); }} style={{ width: '100%', padding: '12px', borderRadius: 10, border: 'none', background: '#3b4f7a', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>完了</button>
               </div>
             </div>
           </div>
@@ -3308,52 +3012,21 @@ justifyContent: 'center', // ← ここを追加して中央寄せにします
       {showSlotPickerMenu && (
         <div
           onClick={() => { setShowSlotPickerMenu(false); setSlotPickerTargetId(null); setTargetSlotId(null); }}
-          style={{
-            position: 'fixed', inset: 0,
-            background: 'rgba(0,0,0,0.6)',
-            zIndex: 10003,
-            display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-          }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 10003, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
         >
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{
-              width: '100%', maxWidth: 500,
-              background: '#1e1e1e',
-              borderRadius: '16px 16px 0 0',
-              paddingBottom: 'env(safe-area-inset-bottom)',
-            }}
-          >
-            {/* ヘッダー */}
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '14px 16px 10px',
-              borderBottom: '1px solid rgba(255,255,255,0.1)',
-            }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 500, background: '#1e1e1e', borderRadius: '16px 16px 0 0', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 10px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
               <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>📷 写真をどこから選ぶ？</span>
-              <button
-                onClick={() => { setShowSlotPickerMenu(false); setSlotPickerTargetId(null); setTargetSlotId(null); }}
-                style={{ background: 'none', border: 'none', color: '#aaa', fontSize: 20, cursor: 'pointer' }}
-              >✕</button>
+              <button onClick={() => { setShowSlotPickerMenu(false); setSlotPickerTargetId(null); setTargetSlotId(null); }} style={{ background: 'none', border: 'none', color: '#aaa', fontSize: 20, cursor: 'pointer' }}>✕</button>
             </div>
 
             <div style={{ padding: '12px 16px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {/* デバイスから選ぶ */}
               <button
                 onClick={() => {
                   setShowSlotPickerMenu(false);
                   document.getElementById('photo-upload')?.click();
                 }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 12,
-                  padding: '14px 16px',
-                  borderRadius: 12,
-                  border: '1.5px solid rgba(255,255,255,0.2)',
-                  background: 'rgba(255,255,255,0.06)',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                }}
+                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderRadius: 12, border: '1.5px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.06)', color: '#fff', cursor: 'pointer', textAlign: 'left' }}
               >
                 <span style={{ fontSize: 26 }}>📱</span>
                 <div>
@@ -3362,7 +3035,6 @@ justifyContent: 'center', // ← ここを追加して中央寄せにします
                 </div>
               </button>
 
-              {/* ストック1〜3 */}
               {([0, 1, 2] as const).map(idx => {
                 const stockColors = ['#f26b9a', '#4caf7d', '#5b9bd5'];
                 const stockEmojis = ['🟠', '🟢', '🔵'];
@@ -3372,21 +3044,9 @@ justifyContent: 'center', // ← ここを追加して中央寄せにします
                 const canUse = count > 0;
                 return (
                   <div key={idx}>
-                    {/* ストックボタン（ヘッダー行） */}
                     <button
-                      onClick={() => {/* 展開はサムネイルグリッドで対応 */}}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 12,
-                        padding: '10px 16px 6px',
-                        width: '100%',
-                        borderRadius: canUse ? '12px 12px 0 0' : 12,
-                        border: `1.5px solid ${canUse ? color + '88' : 'rgba(255,255,255,0.08)'}`,
-                        borderBottom: canUse ? 'none' : undefined,
-                        background: canUse ? `${color}18` : 'rgba(255,255,255,0.03)',
-                        color: canUse ? '#fff' : '#555',
-                        cursor: 'default',
-                        textAlign: 'left',
-                      }}
+                      onClick={() => {}}
+                      style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px 6px', width: '100%', borderRadius: canUse ? '12px 12px 0 0' : 12, border: `1.5px solid ${canUse ? color + '88' : 'rgba(255,255,255,0.08)'}`, borderBottom: canUse ? 'none' : undefined, background: canUse ? `${color}18` : 'rgba(255,255,255,0.03)', color: canUse ? '#fff' : '#555', cursor: 'default', textAlign: 'left' }}
                     >
                       <span style={{ fontSize: 22 }}>{stockEmojis[idx]}</span>
                       <div>
@@ -3397,38 +3057,15 @@ justifyContent: 'center', // ← ここを追加して中央寄せにします
                       </div>
                     </button>
 
-                    {/* サムネイルグリッド */}
                     {canUse && (
-                      <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(4, 1fr)',
-                        gap: 3,
-                        padding: '6px 8px 8px',
-                        background: `${color}10`,
-                        border: `1.5px solid ${color}88`,
-                        borderTop: 'none',
-                        borderRadius: '0 0 12px 12px',
-                        maxHeight: 150,
-                        overflowY: 'auto',
-                      }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 3, padding: '6px 8px 8px', background: `${color}10`, border: `1.5px solid ${color}88`, borderTop: 'none', borderRadius: '0 0 12px 12px', maxHeight: 150, overflowY: 'auto' }}>
                         {stock.map((photo, photoIdx) => (
                           <div
                             key={photoIdx}
                             onClick={() => handleSlotPickFromStock(idx, photo.url)}
-                            style={{
-                              aspectRatio: '1/1',
-                              borderRadius: 6,
-                              overflow: 'hidden',
-                              cursor: 'pointer',
-                              border: `1.5px solid ${color}55`,
-                              flexShrink: 0,
-                            }}
+                            style={{ aspectRatio: '1/1', borderRadius: 6, overflow: 'hidden', cursor: 'pointer', border: `1.5px solid ${color}55`, flexShrink: 0 }}
                           >
-                            <img
-                              src={photo.url}
-                              alt=""
-                              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                            />
+                            <img src={photo.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                           </div>
                         ))}
                       </div>
@@ -3445,27 +3082,10 @@ justifyContent: 'center', // ← ここを追加して中央寄せにします
       {showFillStockPicker && (
         <div
           onClick={() => setShowFillStockPicker(false)}
-          style={{
-            position: 'fixed', inset: 0,
-            background: 'rgba(0,0,0,0.75)',
-            zIndex: 10003,
-            display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-          }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10003, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
         >
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{
-              width: '100%', maxWidth: 500,
-              background: '#1e1e1e',
-              borderRadius: '16px 16px 0 0',
-              paddingBottom: 'env(safe-area-inset-bottom)',
-            }}
-          >
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '14px 16px 10px',
-              borderBottom: '1px solid rgba(255,255,255,0.1)',
-            }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 500, background: '#1e1e1e', borderRadius: '16px 16px 0 0', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 10px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
               <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>🎲 どのストックから配置する？</span>
               <button onClick={() => setShowFillStockPicker(false)} style={{ background: 'none', border: 'none', color: '#aaa', fontSize: 20, cursor: 'pointer' }}>✕</button>
             </div>
@@ -3481,16 +3101,7 @@ justifyContent: 'center', // ← ここを追加して中央寄せにします
                   <button
                     key={idx}
                     onClick={() => canUse && handleFillStockSelected(idx)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 12,
-                      padding: '14px 16px',
-                      borderRadius: 12,
-                      border: `1.5px solid ${canUse ? color + '88' : 'rgba(255,255,255,0.08)'}`,
-                      background: canUse ? `${color}18` : 'rgba(255,255,255,0.03)',
-                      color: canUse ? '#fff' : '#555',
-                      cursor: canUse ? 'pointer' : 'default',
-                      textAlign: 'left',
-                    }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderRadius: 12, border: `1.5px solid ${canUse ? color + '88' : 'rgba(255,255,255,0.08)'}`, background: canUse ? `${color}18` : 'rgba(255,255,255,0.03)', color: canUse ? '#fff' : '#555', cursor: canUse ? 'pointer' : 'default', textAlign: 'left' }}
                   >
                     <span style={{ fontSize: 24 }}>{stockEmojis[idx]}</span>
                     <div>
@@ -3503,9 +3114,7 @@ justifyContent: 'center', // ← ここを追加して中央寄せにします
                             : `${count}枚 → ${templateSlots.length}枠にランダム配置`}
                       </div>
                     </div>
-                    {canUse && (
-                      <div style={{ marginLeft: 'auto', fontSize: 20, color }}>→</div>
-                    )}
+                    {canUse && <div style={{ marginLeft: 'auto', fontSize: 20, color }}>→</div>}
                   </button>
                 );
               })}
@@ -3527,82 +3136,38 @@ justifyContent: 'center', // ← ここを追加して中央寄せにします
         );
         const hasEmptySlot = templateSlots.some(slot => !filledSlotIds.has(slot.id));
         const emptyCount = templateSlots.filter(slot => !filledSlotIds.has(slot.id)).length;
-        const totalCount = templateSlots.length > 0
-          ? templateSlots.length
-          : items.filter(item => item.type === 'photo').length;
+        const totalCount = templateSlots.length > 0 ? templateSlots.length : items.filter(item => item.type === 'photo').length;
         return (
           <div
             onClick={() => { setShowFillModeDialog(false); setPendingFillStockIdx(null); }}
-            style={{
-              position: 'fixed', inset: 0,
-              background: 'rgba(0,0,0,0.75)',
-              zIndex: 10004,
-              display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-            }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10004, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
           >
-            <div
-              onClick={e => e.stopPropagation()}
-              style={{
-                width: '100%', maxWidth: 500,
-                background: '#1e1e1e',
-                borderRadius: '16px 16px 0 0',
-                paddingBottom: 'env(safe-area-inset-bottom)',
-              }}
-            >
-              <div style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '14px 16px 10px',
-                borderBottom: '1px solid rgba(255,255,255,0.1)',
-              }}>
+            <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 500, background: '#1e1e1e', borderRadius: '16px 16px 0 0', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 10px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
                 <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>🎲 どのように配置しますか？</span>
-                <button
-                  onClick={() => { setShowFillModeDialog(false); setPendingFillStockIdx(null); }}
-                  style={{ background: 'none', border: 'none', color: '#aaa', fontSize: 20, cursor: 'pointer' }}
-                >✕</button>
+                <button onClick={() => { setShowFillModeDialog(false); setPendingFillStockIdx(null); }} style={{ background: 'none', border: 'none', color: '#aaa', fontSize: 20, cursor: 'pointer' }}>✕</button>
               </div>
               <div style={{ padding: '12px 16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {hasEmptySlot && (
                   <button
-                    onClick={() => handleFillAllSlots(pendingFillStockIdx, true)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 14,
-                      padding: '16px 18px',
-                      borderRadius: 12,
-                      border: '1.5px solid #4caf7d88',
-                      background: '#4caf7d18',
-                      color: '#fff',
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                    }}
+                    onClick={() => handleFillAllSlots(pendingFillStockIdx!, true)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 18px', borderRadius: 12, border: '1.5px solid #4caf7d88', background: '#4caf7d18', color: '#fff', cursor: 'pointer', textAlign: 'left' }}
                   >
                     <span style={{ fontSize: 28 }}>✨</span>
                     <div>
                       <div style={{ fontSize: 14, fontWeight: 700 }}>あいている枠に入れる</div>
-                      <div style={{ fontSize: 11, color: '#4caf7d', marginTop: 3 }}>
-                        空き枠 {emptyCount} 枠にランダム配置
-                      </div>
+                      <div style={{ fontSize: 11, color: '#4caf7d', marginTop: 3 }}>空き枠 {emptyCount} 枠にランダム配置</div>
                     </div>
                   </button>
                 )}
                 <button
-                  onClick={() => handleFillAllSlots(pendingFillStockIdx, false)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 14,
-                    padding: '16px 18px',
-                    borderRadius: 12,
-                    border: '1.5px solid #f26b9a88',
-                    background: '#f26b9a18',
-                    color: '#fff',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                  }}
+                  onClick={() => handleFillAllSlots(pendingFillStockIdx!, false)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 18px', borderRadius: 12, border: '1.5px solid #f26b9a88', background: '#f26b9a18', color: '#fff', cursor: 'pointer', textAlign: 'left' }}
                 >
                   <span style={{ fontSize: 28 }}>🔀</span>
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 700 }}>すべて写真を入れ替える</div>
-                    <div style={{ fontSize: 11, color: '#f26b9a', marginTop: 3 }}>
-                      全 {totalCount} 枠をランダムに置換
-                    </div>
+                    <div style={{ fontSize: 11, color: '#f26b9a', marginTop: 3 }}>全 {totalCount} 枠をランダムに置換</div>
                   </div>
                 </button>
               </div>
@@ -3611,11 +3176,8 @@ justifyContent: 'center', // ← ここを追加して中央寄せにします
         );
       })()}
 
-{showUpgradeModal && (
-        <UpgradeModal
-          featureName={upgradeFeatureName}
-          onClose={() => setShowUpgradeModal(false)}
-        />
+      {showUpgradeModal && (
+        <UpgradeModal featureName={upgradeFeatureName} onClose={() => setShowUpgradeModal(false)} />
       )}
 
       {cropImageUrl && (

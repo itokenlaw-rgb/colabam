@@ -5,7 +5,6 @@
 // ★ STRIPE_PAYMENT_LINK を自分のStripe Payment LinkのURLに書き換えてください
 // ====================================================
 
-import React from 'react';
 import { auth } from './firebase';
 
 // ★ Stripe ダッシュボード → Payment Links → 作成したリンクのURL
