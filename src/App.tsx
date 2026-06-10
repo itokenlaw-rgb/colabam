@@ -3506,6 +3506,29 @@ justifyContent: 'center', // ← ここを追加して中央寄せにします
                 >✕</button>
               </div>
               <div style={{ padding: '12px 16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {hasEmptySlot && (
+                  <button
+                    onClick={() => handleFillAllSlots(pendingFillStockIdx, true)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 14,
+                      padding: '16px 18px',
+                      borderRadius: 12,
+                      border: '1.5px solid #4caf7d88',
+                      background: '#4caf7d18',
+                      color: '#fff',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <span style={{ fontSize: 28 }}>✨</span>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700 }}>あいている枠に入れる</div>
+                      <div style={{ fontSize: 11, color: '#4caf7d', marginTop: 3 }}>
+                        空き枠 {emptyCount} 枠にランダム配置
+                      </div>
+                    </div>
+                  </button>
+                )}
                 <button
                   onClick={() => handleFillAllSlots(pendingFillStockIdx, false)}
                   style={{
