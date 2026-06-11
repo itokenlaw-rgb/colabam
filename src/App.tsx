@@ -2189,8 +2189,6 @@ const handleFillStockSelected = (stockIdx: 0 | 1 | 2) => {
         </button>
       </header>
 
-      {!isPro && <AdBanner />}
-
       <main className="canvas-area" onClick={() => { setSelectedId(null); setPhotoSubMenuId(null); setPhotoSubMenuPos(null); setItemSubMenuId(null); setItemSubMenuPos(null); setActiveMainTab(null); setShowPhotoAddMenu(false); }}>
         <div
           ref={canvasRef}
@@ -2558,6 +2556,8 @@ const handleFillStockSelected = (stockIdx: 0 | 1 | 2) => {
           </div>
         );
       })()}
+
+      {!isPro && <AdBanner />}
 
       <nav className="bottom-menu">
         {activeMainTab !== null && (
