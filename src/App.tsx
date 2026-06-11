@@ -472,7 +472,7 @@ function getClipPathStyle(shape: ClipShape): React.CSSProperties {
   return {};
 }
 
-function LoginScreen() {
+function LoginScreen({ onClose }: { onClose: () => void }) {
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [isRegister, setIsRegister] = React.useState(false);
@@ -487,6 +487,7 @@ function LoginScreen() {
       } else {
         await signInWithEmailAndPassword(fbAuth, email, password);
       }
+      onClose();
     } catch (e: any) {
       const msg: Record<string, string> = {
         'auth/user-not-found': 'メールアドレスが見つかりません',
@@ -506,6 +507,7 @@ function LoginScreen() {
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(fbAuth, provider);
+      onClose();
     } catch (e: any) {
       if (e.code !== 'auth/popup-closed-by-user') {
         setError('Googleログインに失敗しました');
@@ -515,8 +517,11 @@ function LoginScreen() {
   };
 
   return (
-    <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100dvh',background:'#eef6ff',padding:'0 20px'}}>
-      <div style={{width:'100%',maxWidth:340,background:'white',borderRadius:20,padding:'32px 24px',boxShadow:'0 4px 24px rgba(0,0,0,0.12)'}}>
+    <div
+      onClick={onClose}
+      style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:30000,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 20px'}}
+    >
+      <div onClick={e => e.stopPropagation()} style={{width:'100%',maxWidth:340,background:'white',borderRadius:20,padding:'32px 24px',boxShadow:'0 4px 24px rgba(0,0,0,0.12)'}}>
         <div style={{textAlign:'center',marginBottom:24}}>
           <div style={{fontSize:32,marginBottom:8}}>🎨</div>
           <div style={{fontSize:20,fontWeight:'bold',color:'#333'}}>{isRegister ? '新規登録' : 'ログイン'}</div>
@@ -567,6 +572,9 @@ function LoginScreen() {
           style={{width:'100%',padding:'8px',background:'none',border:'none',color:'#888',fontSize:13,cursor:'pointer'}}
         >
           {isRegister ? 'ログインはこちら' : 'アカウントを作成する'}
+        </button>
+        <button onClick={onClose} style={{width:'100%',padding:'8px',background:'none',border:'none',color:'#ccc',fontSize:12,cursor:'pointer',marginTop:4}}>
+          キャンセル
         </button>
       </div>
     </div>
@@ -1301,6 +1309,7 @@ export default function App() {
   const [pendingFillStockIdx, setPendingFillStockIdx] = useState<0 | 1 | 2 | null>(null);
 
   const { isPro, user, loading: planLoading } = usePlan();
+  const [showLoginModal, setShowLoginModal] = React.useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [upgradeFeatureName, setUpgradeFeatureName] = useState<string | undefined>(undefined);
 
@@ -2133,9 +2142,8 @@ const handleFillStockSelected = (stockIdx: 0 | 1 | 2) => {
     }
   };
 
-  // ログイン確認
+  // ローディング中のみ待機（未ログインでもアプリを使える）
   if (planLoading) return <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100dvh',background:'#eef6ff',fontSize:14,color:'#888'}}>読み込み中...</div>;
-  if (!user) return <LoginScreen />;
 
   return (
     <div className="app-container">
@@ -2144,16 +2152,38 @@ const handleFillStockSelected = (stockIdx: 0 | 1 | 2) => {
           <Undo2 size={18} />
           <span>戻る</span>
         </button>
+        {/* 中央：ログイン/ログアウトボタン */}
+        {user ? (
+          <button
+            onClick={() => signOut(fbAuth)}
+            title={user.email ?? ''}
+            style={{
+              background: 'none', border: '1px solid #ddd',
+              borderRadius: 20, color: '#888', fontSize: 12,
+              cursor: 'pointer', padding: '6px 14px',
+              display: 'flex', alignItems: 'center', gap: 5,
+            }}
+          >
+            {isPro ? '👑' : '👤'} ログアウト
+          </button>
+        ) : (
+          <button
+            onClick={() => setShowLoginModal(true)}
+            style={{
+              background: 'linear-gradient(135deg, #f26b9a, #9b59b6)',
+              border: 'none', borderRadius: 20, color: 'white',
+              fontSize: 12, fontWeight: 'bold',
+              cursor: 'pointer', padding: '6px 16px',
+              display: 'flex', alignItems: 'center', gap: 5,
+              boxShadow: '0 2px 8px rgba(242,107,154,0.4)',
+            }}
+          >
+            🔑 ログイン
+          </button>
+        )}
         <button className="header-btn save-btn" onClick={saveAlbum}>
           <Check size={18} />
           <span>保存</span>
-        </button>
-        <button
-          onClick={() => signOut(fbAuth)}
-          style={{background:'none',border:'none',color:'#aaa',fontSize:11,cursor:'pointer',padding:'4px 8px'}}
-          title={user?.email ?? ''}
-        >
-          {isPro ? '👑' : '👤'} ログアウト
         </button>
       </header>
 
@@ -3300,6 +3330,11 @@ const handleFillStockSelected = (stockIdx: 0 | 1 | 2) => {
 
       {previewUrl && (
         <PreviewModal dataUrl={previewUrl} onClose={() => setPreviewUrl(null)} />
+      )}
+
+      {/* ログインモーダル */}
+      {showLoginModal && (
+        <LoginScreen onClose={() => setShowLoginModal(false)} />
       )}
     </div>
   );
