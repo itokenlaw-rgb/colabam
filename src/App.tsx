@@ -9,6 +9,8 @@ import CropModal from './CropModal';
 import './index.css';
 import { usePlan } from './hooks/usePlan';
 import { UpgradeModal } from './UpgradeModal';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import { auth as fbAuth } from './firebase';
 
 // ===== ストック写真の型 =====
 interface StockPhoto {
@@ -468,6 +470,71 @@ function getClipPathStyle(shape: ClipShape): React.CSSProperties {
     };
   }
   return {};
+}
+
+function LoginScreen() {
+  const [email, setEmail] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [isRegister, setIsRegister] = React.useState(false);
+  const [error, setError] = React.useState('');
+  const [loading, setLoading] = React.useState(false);
+
+  const handle = async () => {
+    setError(''); setLoading(true);
+    try {
+      if (isRegister) {
+        await createUserWithEmailAndPassword(fbAuth, email, password);
+      } else {
+        await signInWithEmailAndPassword(fbAuth, email, password);
+      }
+    } catch (e: any) {
+      const msg: Record<string, string> = {
+        'auth/user-not-found': 'メールアドレスが見つかりません',
+        'auth/wrong-password': 'パスワードが違います',
+        'auth/email-already-in-use': 'このメールアドレスは登録済みです',
+        'auth/weak-password': 'パスワードは6文字以上にしてください',
+        'auth/invalid-email': 'メールアドレスの形式が正しくありません',
+        'auth/invalid-credential': 'メールアドレスまたはパスワードが違います',
+      };
+      setError(msg[e.code] ?? 'エラーが発生しました');
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100dvh',background:'#eef6ff',padding:'0 20px'}}>
+      <div style={{width:'100%',maxWidth:340,background:'white',borderRadius:20,padding:'32px 24px',boxShadow:'0 4px 24px rgba(0,0,0,0.12)'}}>
+        <div style={{textAlign:'center',marginBottom:24}}>
+          <div style={{fontSize:32,marginBottom:8}}>🎨</div>
+          <div style={{fontSize:20,fontWeight:'bold',color:'#333'}}>{isRegister ? '新規登録' : 'ログイン'}</div>
+        </div>
+        <input
+          type="email" placeholder="メールアドレス" value={email}
+          onChange={e => setEmail(e.target.value)}
+          style={{width:'100%',padding:'12px',border:'1px solid #ddd',borderRadius:10,fontSize:14,marginBottom:10,boxSizing:'border-box' as const}}
+        />
+        <input
+          type="password" placeholder="パスワード（6文字以上）" value={password}
+          onChange={e => setPassword(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handle()}
+          style={{width:'100%',padding:'12px',border:'1px solid #ddd',borderRadius:10,fontSize:14,marginBottom:10,boxSizing:'border-box' as const}}
+        />
+        {error && <div style={{color:'#e05555',fontSize:12,marginBottom:8,textAlign:'center'}}>{error}</div>}
+        <button
+          onClick={handle} disabled={loading}
+          style={{width:'100%',padding:'13px',background:'#f26b9a',color:'white',border:'none',borderRadius:10,fontSize:15,fontWeight:'bold',cursor:'pointer',marginBottom:12}}
+        >
+          {loading ? '...' : isRegister ? '登録する' : 'ログイン'}
+        </button>
+        <button
+          onClick={() => { setIsRegister(r => !r); setError(''); }}
+          style={{width:'100%',padding:'8px',background:'none',border:'none',color:'#888',fontSize:13,cursor:'pointer'}}
+        >
+          {isRegister ? 'ログインはこちら' : 'アカウントを作成する'}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function AdBanner() {
@@ -1197,7 +1264,7 @@ export default function App() {
   const [showFillModeDialog, setShowFillModeDialog] = useState(false);
   const [pendingFillStockIdx, setPendingFillStockIdx] = useState<0 | 1 | 2 | null>(null);
 
-  const { isPro } = usePlan();
+  const { isPro, user, loading: planLoading } = usePlan();
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [upgradeFeatureName, setUpgradeFeatureName] = useState<string | undefined>(undefined);
 
@@ -2030,6 +2097,10 @@ const handleFillStockSelected = (stockIdx: 0 | 1 | 2) => {
     }
   };
 
+  // ログイン確認
+  if (planLoading) return <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100dvh',background:'#eef6ff',fontSize:14,color:'#888'}}>読み込み中...</div>;
+  if (!user) return <LoginScreen />;
+
   return (
     <div className="app-container">
       <header className="header">
@@ -2040,6 +2111,13 @@ const handleFillStockSelected = (stockIdx: 0 | 1 | 2) => {
         <button className="header-btn save-btn" onClick={saveAlbum}>
           <Check size={18} />
           <span>保存</span>
+        </button>
+        <button
+          onClick={() => signOut(fbAuth)}
+          style={{background:'none',border:'none',color:'#aaa',fontSize:11,cursor:'pointer',padding:'4px 8px'}}
+          title={user?.email ?? ''}
+        >
+          {isPro ? '👑' : '👤'} ログアウト
         </button>
       </header>
 
