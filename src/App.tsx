@@ -1539,10 +1539,6 @@ export default function App() {
         openUpgrade('無制限保存');
         return;
       }
-      // カウントを+1して保存
-      const newInfo = { date: info.date, count: info.count + 1 };
-      localStorage.setItem('saveInfo', JSON.stringify(newInfo));
-      setSaveInfo(newInfo);
     }
 
     setSelectedId(null);
@@ -1573,6 +1569,14 @@ export default function App() {
         });
       } else {
         setPreviewUrl(dataUrl);
+      }
+
+      // ✅ 保存成功後にカウントを+1
+      if (!isPro) {
+        const info = getSaveInfo();
+        const newInfo = { date: info.date, count: info.count + 1 };
+        localStorage.setItem('saveInfo', JSON.stringify(newInfo));
+        setSaveInfo(newInfo);
       }
     } catch (err) {
       console.error("保存に失敗しました", err);
