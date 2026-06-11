@@ -607,26 +607,44 @@ function AdBanner() {
 }
 
 function PreviewModal({ dataUrl, onClose }: { dataUrl: string; onClose: () => void }) {
+  const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
+
+  const handleDownload = () => {
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = `colabam-${Date.now()}.jpg`;
+    a.click();
+  };
+
   return (
     <div className="preview-overlay" onClick={onClose}>
       <div className="preview-modal" onClick={e => e.stopPropagation()}>
         <div style={{ marginBottom: '10px', fontWeight: 'bold', color: '#fff' }}>完成画像</div>
         <img src={dataUrl} alt="preview" className="preview-img" style={{ maxWidth: '100%', maxHeight: '60vh', borderRadius: '8px' }} />
-        <div style={{ 
-          color: '#eee', 
-          fontSize: '13px', 
-          textAlign: 'center', 
-          marginTop: '15px', 
-          padding: '10px',
-          background: 'rgba(255,255,255,0.1)',
-          borderRadius: '8px',
-          lineHeight: '1.5'
-        }}>
-          上の画像を<strong>長押し</strong>して<br />
-          <strong>「"写真"に追加」</strong>を選択すると<br />
-          カメラロールに保存されます。
-        </div>
-        <div className="preview-actions" style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'center' }}>
+        {isMobile ? (
+          <div style={{ 
+            color: '#eee', fontSize: '13px', textAlign: 'center', 
+            marginTop: '15px', padding: '10px',
+            background: 'rgba(255,255,255,0.1)', borderRadius: '8px', lineHeight: '1.5'
+          }}>
+            上の画像を<strong>長押し</strong>して<br />
+            <strong>「"写真"に追加」</strong>を選択すると<br />
+            カメラロールに保存されます。
+          </div>
+        ) : (
+          <button
+            onClick={handleDownload}
+            style={{
+              marginTop: 16, width: '100%', padding: '13px',
+              background: 'linear-gradient(135deg, #f26b9a, #9b59b6)',
+              color: 'white', border: 'none', borderRadius: 12,
+              fontSize: 15, fontWeight: 'bold', cursor: 'pointer',
+            }}
+          >
+            ⬇️ ダウンロード
+          </button>
+        )}
+        <div className="preview-actions" style={{ marginTop: '12px', display: 'flex', gap: '10px', justifyContent: 'center' }}>
           <button className="preview-btn close" onClick={onClose} style={{ padding: '10px 20px', borderRadius: '20px', border: 'none', cursor: 'pointer' }}>
             閉じる
           </button>
