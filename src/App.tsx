@@ -1315,6 +1315,22 @@ export default function App() {
 
   const { isPro, user, loading: planLoading } = usePlan();
   const [showLoginModal, setShowLoginModal] = React.useState(false);
+
+  // ===== 保存回数制限（free: 1日3回まで）=====
+  const SAVE_LIMIT = 3;
+  const getSaveInfo = () => {
+    const today = new Date().toDateString();
+    try {
+      const raw = localStorage.getItem('saveInfo');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.date === today) return parsed;
+      }
+    } catch {}
+    return { date: today, count: 0 };
+  };
+  const [saveInfo, setSaveInfo] = React.useState(getSaveInfo);
+  const saveRemaining = isPro ? null : Math.max(0, SAVE_LIMIT - saveInfo.count);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [upgradeFeatureName, setUpgradeFeatureName] = useState<string | undefined>(undefined);
 
@@ -1515,6 +1531,20 @@ export default function App() {
   };
 
   const saveAlbum = async () => {
+    // free ユーザーの保存回数チェック
+    if (!isPro) {
+      const info = getSaveInfo();
+      if (info.count >= SAVE_LIMIT) {
+        alert(`本日の保存回数（${SAVE_LIMIT}回）に達しました。\nProにアップグレードすると無制限に保存できます。`);
+        openUpgrade('無制限保存');
+        return;
+      }
+      // カウントを+1して保存
+      const newInfo = { date: info.date, count: info.count + 1 };
+      localStorage.setItem('saveInfo', JSON.stringify(newInfo));
+      setSaveInfo(newInfo);
+    }
+
     setSelectedId(null);
     await new Promise(r => setTimeout(r, 100));
     
@@ -2187,9 +2217,13 @@ const handleFillStockSelected = (stockIdx: 0 | 1 | 2) => {
             🔑 ログイン
           </button>
         )}
-        <button className="header-btn save-btn" onClick={saveAlbum}>
+        <button
+          className="header-btn save-btn"
+          onClick={saveAlbum}
+          style={saveRemaining === 0 ? { opacity: 0.5 } : undefined}
+        >
           <Check size={18} />
-          <span>保存</span>
+          <span>{isPro ? '保存' : `保存(🔑${saveRemaining})`}</span>
         </button>
       </header>
 
