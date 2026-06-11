@@ -1721,6 +1721,7 @@ export default function App() {
   };
 
   const handleStockFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!isPro) { e.target.value = ''; openUpgrade('ストック機能'); return; }
     const files = Array.from(e.target.files ?? []);
     if (files.length === 0) return;
     e.target.value = '';
@@ -2627,7 +2628,8 @@ const handleFillStockSelected = (stockIdx: 0 | 1 | 2) => {
 
                 <button
                   onPointerDown={e => e.stopPropagation()}
-                  onClick={() => { 
+                  onClick={() => {
+                    if (!isPro) { openUpgrade('ストック機能'); return; }
                     setStockDeleteSelected(new Set()); 
                     setShowStockOrganizer(true); 
                   }}
@@ -2642,7 +2644,7 @@ const handleFillStockSelected = (stockIdx: 0 | 1 | 2) => {
                 >
                   <span style={{ fontSize: 18, minWidth: 24 }}>🗂️</span>
                   <div>
-                    <div>ストックを管理する</div>
+                    <div>ストックを管理する {!isPro && <span style={{fontSize:10,color:'#f26b9a'}}>🔒 Pro</span>}</div>
                     <div style={{ fontSize: 10, color: '#aaa', fontWeight: 400 }}>ストックの写真を追加・削除</div>
                     <div style={{ fontSize: 9, color: '#f26b9a', fontWeight: 400, marginTop: 2 }}>
                       {`〔ストック１〕：${photoStocks[0].length}枚、〔ストック２〕：${photoStocks[1].length}枚、〔ストック３〕：${photoStocks[2].length}枚`}
@@ -2657,6 +2659,7 @@ const handleFillStockSelected = (stockIdx: 0 | 1 | 2) => {
                     <button
                       onPointerDown={e => e.stopPropagation()}
                       onClick={() => {
+                        if (!isPro) { openUpgrade('ストック機能'); return; }
                         if (!canOpen) return;
                         setShowFillStockPicker(true);
                         setShowPhotoAddMenu(false);
@@ -2674,7 +2677,7 @@ const handleFillStockSelected = (stockIdx: 0 | 1 | 2) => {
                     >
                       <span style={{ fontSize: 18, minWidth: 24 }}>🎲</span>
                       <div>
-                        <div>ストックから枠にランダムで入れる</div>
+                        <div>ストックから枠にランダムで入れる {!isPro && <span style={{fontSize:10,color:'#f26b9a'}}>🔒 Pro</span>}</div>
                         <div style={{ fontSize: 10, fontWeight: 400, color: (!anyStockHasPhotos || templateSlots.length === 0) ? '#ff6b6b' : '#aaa' }}>
                           {!anyStockHasPhotos
                             ? 'ストックに写真がありません'
@@ -2690,7 +2693,8 @@ const handleFillStockSelected = (stockIdx: 0 | 1 | 2) => {
                 {photoStocks.some(s => s.length > 0) && (
                   <button
                     onPointerDown={e => e.stopPropagation()}
-                    onClick={() => { 
+                    onClick={() => {
+                      if (!isPro) { openUpgrade('ストック機能'); return; }
                       if(window.confirm('すべてのストック写真を消去しますか？')) {
                         setPhotoStocks([[], [], []]); 
                         setShowPhotoAddMenu(false); 
@@ -2705,7 +2709,7 @@ const handleFillStockSelected = (stockIdx: 0 | 1 | 2) => {
                     }}
                   >
                     <span style={{ fontSize: 16, minWidth: 24 }}>🗑️</span>
-                    <div>全ストックを消す</div>
+                    <div>全ストックを消す {!isPro && <span style={{fontSize:10,color:'#f26b9a'}}>🔒 Pro</span>}</div>
                   </button>
                 )}
               </div>
