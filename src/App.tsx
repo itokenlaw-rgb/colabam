@@ -478,6 +478,26 @@ function LoginScreen({ onClose }: { onClose: () => void }) {
   const [isRegister, setIsRegister] = React.useState(false);
   const [error, setError] = React.useState('');
   const [loading, setLoading] = React.useState(false);
+  const { isPro, user } = usePlan();
+
+  const handleManageSubscription = async () => {
+    const uid = user?.uid;
+    if (!uid) return;
+    try {
+      const res = await fetch(
+        'https://us-central1-colabam-f675c.cloudfunctions.net/createPortalSession',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uid }),
+        }
+      );
+      const { url } = await res.json();
+      window.open(url, '_blank');
+    } catch {
+      setError('ポータルへの接続に失敗しました');
+    }
+  };
 
   const handleEmail = async () => {
     setError(''); setLoading(true);
@@ -578,6 +598,18 @@ function LoginScreen({ onClose }: { onClose: () => void }) {
         <button onClick={onClose} style={{width:'100%',padding:'8px',background:'none',border:'none',color:'#ccc',fontSize:12,cursor:'pointer',marginTop:4}}>
           キャンセル
         </button>
+
+        {isPro && (
+          <>
+            <div style={{height:1,background:'#eee',margin:'12px 0'}} />
+            <button
+              onClick={handleManageSubscription}
+              style={{width:'100%',padding:'10px',background:'none',border:'1px solid #eee',borderRadius:10,color:'#aaa',fontSize:12,cursor:'pointer'}}
+            >
+              サブスクを管理・解約する
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
