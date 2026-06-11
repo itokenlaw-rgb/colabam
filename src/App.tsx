@@ -589,6 +589,7 @@ function AdBanner() {
       width: '100%',
       background: '#f0f0f0',
       borderTop: '1px solid #ddd',
+      borderBottom: '1px solid #ddd',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -597,6 +598,8 @@ function AdBanner() {
       fontSize: 12,
       color: '#aaa',
       gap: 6,
+      position: 'relative',
+      zIndex: 1,
     }}>
       <span>📢 広告スペース</span>
     </div>
@@ -2558,9 +2561,8 @@ const handleFillStockSelected = (stockIdx: 0 | 1 | 2) => {
         );
       })()}
 
-      {!isPro && <AdBanner />}
-
       <nav className="bottom-menu">
+        {!isPro && <AdBanner />}
         {activeMainTab !== null && (
           <div className="sub-menu" style={
             activeMainTab === 'template' && customPicking ? { height: 180 }
