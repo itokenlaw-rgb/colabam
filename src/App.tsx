@@ -516,12 +516,36 @@ function LoginScreen({ onClose }: { onClose: () => void }) {
     setLoading(false);
   };
 
-  return (
+return (
     <div
       onClick={onClose}
       style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:30000,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 20px'}}
     >
+      {/* 🛠️ position: 'relative' を追加しました */}
+      <div onClick={e => e.stopPropagation()} style={{position: 'relative', width:'100%',maxWidth:340,background:'white',borderRadius:20,padding:'32px 24px',boxShadow:'0 4px 24px rgba(0,0,0,0.12)'}}>
+        
+        {/* 🛠️ 右上の「✕」ボタンを追加しました */}
+        <button
+          onClick={onClose}
+          style={{
+            position: 'absolute',
+            top: '16px',
+            right: '16px',
+            background: 'none',
+            border: 'none',
+            fontSize: '20px',
+            color: '#888',
+            cursor: 'pointer',
+            padding: '4px',
+            lineHeight: 1
+          }}
+        >
+          ✕
+        </button>
+     style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:30000,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 20px'}}
+    >
       <div onClick={e => e.stopPropagation()} style={{width:'100%',maxWidth:340,background:'white',borderRadius:20,padding:'32px 24px',boxShadow:'0 4px 24px rgba(0,0,0,0.12)'}}>
+
         <div style={{textAlign:'center',marginBottom:24}}>
           <div style={{fontSize:32,marginBottom:8}}>🎨</div>
           <div style={{fontSize:20,fontWeight:'bold',color:'#333'}}>{isRegister ? '新規登録' : 'ログイン'}</div>
