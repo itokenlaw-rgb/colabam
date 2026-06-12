@@ -562,7 +562,7 @@ function LoginScreen({ onClose }: { onClose: () => void }) {
               </button>
             )}
             <button
-              onClick={() => { signOut(fbAuth); onClose(); }}
+              onClick={() => { signOut(fbAuth); }}
               style={{width:'100%',padding:'13px',background:'none',border:'1px solid #ddd',borderRadius:10,color:'#888',fontSize:14,cursor:'pointer',marginBottom:10}}
             >
               ログアウト
