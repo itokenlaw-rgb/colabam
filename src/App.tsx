@@ -544,80 +544,81 @@ function LoginScreen({ onClose }: { onClose: () => void }) {
       <div onClick={e => e.stopPropagation()} style={{width:'100%',maxWidth:340,background:'white',borderRadius:20,padding:'32px 24px',boxShadow:'0 4px 24px rgba(0,0,0,0.12)',position:'relative'}}>
         {/* × 閉じるボタン */}
         <button onClick={onClose} style={{position:'absolute',top:12,left:16,background:'none',border:'none',fontSize:20,color:'#bbb',cursor:'pointer',lineHeight:1,padding:4}}>×</button>
-        <div style={{textAlign:'center',marginBottom:24}}>
-          <div style={{fontSize:32,marginBottom:8}}>🎨</div>
-          <div style={{fontSize:20,fontWeight:'bold',color:'#333'}}>{isRegister ? '新規登録' : 'ログイン'}</div>
-        </div>
 
-        {/* Googleログインボタン */}
-        <button
-          onClick={handleGoogle} disabled={loading}
-          style={{
-            width:'100%',padding:'13px',
-            background:'white',color:'#333',
-            border:'1.5px solid #ddd',borderRadius:10,
-            fontSize:14,fontWeight:'bold',cursor:'pointer',
-            marginBottom:16,display:'flex',alignItems:'center',justifyContent:'center',gap:8,
-            boxShadow:'0 1px 4px rgba(0,0,0,0.1)',
-          }}
-        >
-          <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-          Googleでログイン
-        </button>
-
-        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:16}}>
-          <div style={{flex:1,height:1,background:'#eee'}} />
-          <span style={{fontSize:12,color:'#bbb'}}>またはメールで</span>
-          <div style={{flex:1,height:1,background:'#eee'}} />
-        </div>
-
-        <input
-          type="email" placeholder="メールアドレス" value={email}
-          onChange={e => setEmail(e.target.value)}
-          style={{width:'100%',padding:'12px',border:'1px solid #ddd',borderRadius:10,fontSize:14,marginBottom:10,boxSizing:'border-box' as const}}
-        />
-        <input
-          type="password" placeholder="パスワード（6文字以上）" value={password}
-          onChange={e => setPassword(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleEmail()}
-          style={{width:'100%',padding:'12px',border:'1px solid #ddd',borderRadius:10,fontSize:14,marginBottom:10,boxSizing:'border-box' as const}}
-        />
-        {error && <div style={{color:'#e05555',fontSize:12,marginBottom:8,textAlign:'center'}}>{error}</div>}
-        <button
-          onClick={handleEmail} disabled={loading}
-          style={{width:'100%',padding:'13px',background:'#f26b9a',color:'white',border:'none',borderRadius:10,fontSize:15,fontWeight:'bold',cursor:'pointer',marginBottom:12}}
-        >
-          {loading ? '...' : isRegister ? '登録する' : 'ログイン'}
-        </button>
-        <button
-          onClick={() => { setIsRegister(r => !r); setError(''); }}
-          style={{width:'100%',padding:'8px',background:'none',border:'none',color:'#888',fontSize:13,cursor:'pointer'}}
-        >
-          {isRegister ? 'ログインはこちら' : 'アカウントを作成する'}
-        </button>
-        <button onClick={onClose} style={{width:'100%',padding:'8px',background:'none',border:'none',color:'#ccc',fontSize:12,cursor:'pointer',marginTop:4}}>
-          キャンセル
-        </button>
-
-        {user && (
+        {user ? (
+          /* ===== ログイン済み：アカウント管理画面 ===== */
           <>
-            <div style={{height:1,background:'#eee',margin:'12px 0'}} />
+            <div style={{textAlign:'center',marginBottom:24}}>
+              <div style={{fontSize:32,marginBottom:8}}>{isPro ? '👑' : '👤'}</div>
+              <div style={{fontSize:16,fontWeight:'bold',color:'#333'}}>{user.email ?? 'ログイン中'}</div>
+              <div style={{fontSize:12,color:'#aaa',marginTop:4}}>{isPro ? 'Proプラン' : '無料プラン'}</div>
+            </div>
+            {isPro && (
+              <button
+                onClick={handleManageSubscription}
+                style={{width:'100%',padding:'13px',background:'none',border:'1.5px solid #f26b9a',borderRadius:10,color:'#f26b9a',fontSize:14,fontWeight:'bold',cursor:'pointer',marginBottom:10}}
+              >
+                サブスクを管理・解約する
+              </button>
+            )}
             <button
               onClick={() => { signOut(fbAuth); onClose(); }}
-              style={{width:'100%',padding:'10px',background:'none',border:'1px solid #eee',borderRadius:10,color:'#888',fontSize:13,cursor:'pointer'}}
+              style={{width:'100%',padding:'13px',background:'none',border:'1px solid #ddd',borderRadius:10,color:'#888',fontSize:14,cursor:'pointer',marginBottom:10}}
             >
               ログアウト
             </button>
+            <button onClick={onClose} style={{width:'100%',padding:'8px',background:'none',border:'none',color:'#ccc',fontSize:12,cursor:'pointer'}}>
+              キャンセル
+            </button>
           </>
-        )}
-        {isPro && (
+        ) : (
+          /* ===== 未ログイン：ログインフォーム ===== */
           <>
-            <div style={{height:1,background:'#eee',margin:'4px 0'}} />
+            <div style={{textAlign:'center',marginBottom:24}}>
+              <div style={{fontSize:32,marginBottom:8}}>🎨</div>
+              <div style={{fontSize:20,fontWeight:'bold',color:'#333'}}>{isRegister ? '新規登録' : 'ログイン'}</div>
+            </div>
+
             <button
-              onClick={handleManageSubscription}
-              style={{width:'100%',padding:'10px',background:'none',border:'1px solid #eee',borderRadius:10,color:'#aaa',fontSize:12,cursor:'pointer'}}
+              onClick={handleGoogle} disabled={loading}
+              style={{width:'100%',padding:'13px',background:'white',color:'#333',border:'1.5px solid #ddd',borderRadius:10,fontSize:14,fontWeight:'bold',cursor:'pointer',marginBottom:16,display:'flex',alignItems:'center',justifyContent:'center',gap:8,boxShadow:'0 1px 4px rgba(0,0,0,0.1)'}}
             >
-              サブスクを管理・解約する
+              <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+              Googleでログイン
+            </button>
+
+            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:16}}>
+              <div style={{flex:1,height:1,background:'#eee'}} />
+              <span style={{fontSize:12,color:'#bbb'}}>またはメールで</span>
+              <div style={{flex:1,height:1,background:'#eee'}} />
+            </div>
+
+            <input
+              type="email" placeholder="メールアドレス" value={email}
+              onChange={e => setEmail(e.target.value)}
+              style={{width:'100%',padding:'12px',border:'1px solid #ddd',borderRadius:10,fontSize:14,marginBottom:10,boxSizing:'border-box' as const}}
+            />
+            <input
+              type="password" placeholder="パスワード（6文字以上）" value={password}
+              onChange={e => setPassword(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleEmail()}
+              style={{width:'100%',padding:'12px',border:'1px solid #ddd',borderRadius:10,fontSize:14,marginBottom:10,boxSizing:'border-box' as const}}
+            />
+            {error && <div style={{color:'#e05555',fontSize:12,marginBottom:8,textAlign:'center'}}>{error}</div>}
+            <button
+              onClick={handleEmail} disabled={loading}
+              style={{width:'100%',padding:'13px',background:'#f26b9a',color:'white',border:'none',borderRadius:10,fontSize:15,fontWeight:'bold',cursor:'pointer',marginBottom:12}}
+            >
+              {loading ? '...' : isRegister ? '登録する' : 'ログイン'}
+            </button>
+            <button
+              onClick={() => { setIsRegister(r => !r); setError(''); }}
+              style={{width:'100%',padding:'8px',background:'none',border:'none',color:'#888',fontSize:13,cursor:'pointer'}}
+            >
+              {isRegister ? 'ログインはこちら' : 'アカウントを作成する'}
+            </button>
+            <button onClick={onClose} style={{width:'100%',padding:'8px',background:'none',border:'none',color:'#ccc',fontSize:12,cursor:'pointer',marginTop:4}}>
+              キャンセル
             </button>
           </>
         )}
