@@ -599,9 +599,20 @@ function LoginScreen({ onClose }: { onClose: () => void }) {
           キャンセル
         </button>
 
-        {isPro && (
+        {user && (
           <>
             <div style={{height:1,background:'#eee',margin:'12px 0'}} />
+            <button
+              onClick={() => { signOut(fbAuth); onClose(); }}
+              style={{width:'100%',padding:'10px',background:'none',border:'1px solid #eee',borderRadius:10,color:'#888',fontSize:13,cursor:'pointer'}}
+            >
+              ログアウト
+            </button>
+          </>
+        )}
+        {isPro && (
+          <>
+            <div style={{height:1,background:'#eee',margin:'4px 0'}} />
             <button
               onClick={handleManageSubscription}
               style={{width:'100%',padding:'10px',background:'none',border:'1px solid #eee',borderRadius:10,color:'#aaa',fontSize:12,cursor:'pointer'}}
@@ -2245,7 +2256,7 @@ const handleFillStockSelected = (stockIdx: 0 | 1 | 2) => {
         {/* 中央：ログイン/ログアウトボタン */}
         {user ? (
           <button
-onClick={() => setShowLoginModal(true)}
+            onClick={() => signOut(fbAuth)}
             title={user.email ?? ''}
             style={{
               background: 'none', border: '1px solid #ddd',
