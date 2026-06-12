@@ -2245,7 +2245,7 @@ const handleFillStockSelected = (stockIdx: 0 | 1 | 2) => {
         {/* 中央：ログイン/ログアウトボタン */}
         {user ? (
           <button
-            onClick={() => signOut(fbAuth)}
+onClick={() => setShowLoginModal(true)}
             title={user.email ?? ''}
             style={{
               background: 'none', border: '1px solid #ddd',
