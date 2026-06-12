@@ -472,13 +472,12 @@ function getClipPathStyle(shape: ClipShape): React.CSSProperties {
   return {};
 }
 
-function LoginScreen({ onClose }: { onClose: () => void }) {
+function LoginScreen({ onClose, user, isPro }: { onClose: () => void; user: import('firebase/auth').User | null; isPro: boolean }) {
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [isRegister, setIsRegister] = React.useState(false);
   const [error, setError] = React.useState('');
   const [loading, setLoading] = React.useState(false);
-  const { isPro, user } = usePlan();
 
   const handleManageSubscription = async () => {
     const uid = user?.uid;
@@ -3442,7 +3441,7 @@ const handleFillStockSelected = (stockIdx: 0 | 1 | 2) => {
 
       {/* ログインモーダル */}
       {showLoginModal && (
-        <LoginScreen onClose={() => setShowLoginModal(false)} />
+        <LoginScreen onClose={() => setShowLoginModal(false)} user={user} isPro={isPro} />
       )}
     </div>
   );
