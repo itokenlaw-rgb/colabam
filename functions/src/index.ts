@@ -1,7 +1,8 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import Stripe from 'stripe';
-import * as cors from 'cors';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const cors = require('cors');
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -9,11 +10,15 @@ const db = admin.firestore();
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY!;
 const WEBHOOK_SECRET    = process.env.WEBHOOK_SECRET!;
 
-const stripe = new Stripe(STRIPE_SECRET_KEY, {
-  apiVersion: '2026-05-27.dahlia',
-});
+let _stripe: InstanceType<typeof Stripe> | null = null;
+function getStripe(): InstanceType<typeof Stripe> {
+  if (!_stripe) {
+    _stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2026-05-27.dahlia' });
+  }
+  return _stripe;
+}
 
-const corsHandler = (cors as any)({ origin: 'https://colabam.vercel.app' });
+const corsHandler = cors({ origin: 'https://colabam.vercel.app' });
 
 // ── Stripe Webhook ──────────────────────────────────────────
 export const stripeWebhook = functions.https.onRequest(async (req, res) => {
@@ -21,7 +26,7 @@ export const stripeWebhook = functions.https.onRequest(async (req, res) => {
 
   let event: any;
   try {
-    event = stripe.webhooks.constructEvent(req.rawBody, sig, WEBHOOK_SECRET);
+    event = getStripe().webhooks.constructEvent(req.rawBody, sig, WEBHOOK_SECRET);
   } catch (err) {
     console.error('Webhook signature verification failed:', err);
     res.status(400).send('Webhook Error');
@@ -86,7 +91,7 @@ export const createPortalSession = functions.https.onRequest((req, res) => {
       return;
     }
 
-    const session = await stripe.billingPortal.sessions.create({
+    const session = await getStripe().billingPortal.sessions.create({
       customer: customerId,
       return_url: 'https://colabam.vercel.app',
     });
