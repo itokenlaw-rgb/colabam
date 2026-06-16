@@ -927,7 +927,7 @@ const BG_SERIES: BgSeries[] = [
   },
 ];
 
-type StampCategory = 'with-bg' | 'no-bg';
+type StampCategory = 'with-bg' | 'no-bg' | 'stamp-img' | 'masking-tape';
 
 interface StampCategoryDef {
   id: StampCategory;
@@ -935,8 +935,10 @@ interface StampCategoryDef {
 }
 
 const STAMP_CATEGORIES: StampCategoryDef[] = [
-  { id: 'no-bg',   label: 'メッセージ' },
-  { id: 'with-bg', label: 'プレート' },
+  { id: 'stamp-img',    label: 'スタンプ' },
+  { id: 'masking-tape', label: 'マスキングテープ' },
+  { id: 'no-bg',        label: 'メッセージ' },
+  { id: 'with-bg',      label: 'プレート' },
 ];
 
 const STAMP_FILES: Record<StampCategory, string[]> = {
@@ -948,29 +950,51 @@ const STAMP_FILES: Record<StampCategory, string[]> = {
     ...Array.from({ length: 12 }, (_, i) => `/stamps/with-bg/colabammojiimg${String(i + 1).padStart(3, '0')}.jpg`),
     ...Array.from({ length: 12 }, (_, i) => `/stamps/with-bg/colabammojiimg${String(i + 101).padStart(3, '0')}.jpg`),
   ],
+  'stamp-img': [
+    ...Array.from({ length: 13 }, (_, i) => `/stamps/colabamstanmp${String(i + 1).padStart(3, '0')}.png`),
+  ],
+  'masking-tape': [
+    ...Array.from({ length: 13 }, (_, i) => `/stamps/masking-tape/colabamtape${String(i + 1).padStart(3, '0')}.png`),
+  ],
 };
 
-function StampMenu({ onAdd }: { onAdd: (url: string) => void }) {
-  const [activeCategory, setActiveCategory] = useState<StampCategory>('no-bg');
+function StampMenu({ onAdd }: { onAdd: (url: string, opts?: { width?: number; height?: number }) => void }) {
+  const [activeCategory, setActiveCategory] = useState<StampCategory>('stamp-img');
   const files = STAMP_FILES[activeCategory];
 
+  // カテゴリごとのデフォルトサイズ
+  const getAddOpts = (cat: StampCategory) => {
+    if (cat === 'masking-tape') return { width: 300, height: 60 };
+    if (cat === 'stamp-img')   return { width: 120, height: 120 };
+    return { width: 320, height: 95 }; // メッセージ・プレート
+  };
+
+  // タブを2行に分ける（前2つと後2つ）
+  const topCats = STAMP_CATEGORIES.slice(0, 2);
+  const bottomCats = STAMP_CATEGORIES.slice(2);
+
+  const renderTab = (cat: StampCategoryDef) => (
+    <button
+      key={cat.id}
+      onClick={() => setActiveCategory(cat.id)}
+      style={{
+        flex: 1, padding: '5px 4px', borderRadius: 6,
+        border: `2px solid ${activeCategory === cat.id ? 'var(--primary)' : '#ddd'}`,
+        background: activeCategory === cat.id ? '#fff0f5' : 'white',
+        cursor: 'pointer', fontSize: 10,
+        fontWeight: activeCategory === cat.id ? 'bold' : 'normal',
+        color: activeCategory === cat.id ? 'var(--primary)' : '#555',
+        whiteSpace: 'nowrap',
+      }}
+    >{cat.label}</button>
+  );
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, height: '100%' }}>
-      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-        {STAMP_CATEGORIES.map(cat => (
-          <button
-            key={cat.id}
-            onClick={() => setActiveCategory(cat.id)}
-            style={{
-              flex: 1, padding: '8px 4px', borderRadius: 6,
-              border: `2px solid ${activeCategory === cat.id ? 'var(--primary)' : '#ddd'}`,
-              background: activeCategory === cat.id ? '#fff0f5' : 'white',
-              cursor: 'pointer', fontSize: 11,
-              fontWeight: activeCategory === cat.id ? 'bold' : 'normal',
-              color: activeCategory === cat.id ? 'var(--primary)' : '#555',
-            }}
-          >{cat.label}</button>
-        ))}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, height: '100%' }}>
+      {/* タブ 2行 */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 4 }}>{topCats.map(renderTab)}</div>
+        <div style={{ display: 'flex', gap: 4 }}>{bottomCats.map(renderTab)}</div>
       </div>
 
       {files.length === 0 ? (
@@ -985,7 +1009,7 @@ function StampMenu({ onAdd }: { onAdd: (url: string) => void }) {
           {files.map((src, i) => (
             <button
               key={src}
-              onClick={() => onAdd(src)}
+              onClick={() => onAdd(src, getAddOpts(activeCategory))}
               style={{
                 width: 52, height: 52, borderRadius: 8, padding: 2,
                 border: '1px solid #eee', background: 'white',
@@ -2231,7 +2255,7 @@ const handleFillStockSelected = (stockIdx: 0 | 1 | 2) => {
       case 'stamp':
         return (
           <StampMenu
-            onAdd={(url) => addItem('stamp', url, { width: 320, height: 95 })}
+            onAdd={(url, opts) => addItem('stamp', url, { width: opts?.width ?? 120, height: opts?.height ?? 120 })}
           />
         );
       case 'background':
