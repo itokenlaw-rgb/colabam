@@ -962,12 +962,12 @@ function StampMenu({ onAdd }: { onAdd: (url: string, opts?: { width?: number; he
   const [activeCategory, setActiveCategory] = useState<StampCategory>('stamp-img');
   const files = STAMP_FILES[activeCategory];
 
-  // カテゴリごとのデフォルトサイズ
-  const getAddOpts = (cat: StampCategory) => {
-    if (cat === 'masking-tape') return { width: 300, height: 60 };
-    if (cat === 'stamp-img')   return { width: 120, height: 120 };
-    return { width: 320, height: 95 }; // メッセージ・プレート
-  };
+const getAddOpts = (cat: StampCategory) => {
+  if (cat === 'masking-tape') return { width: 240, height: 240 };  // 300×60 → 120×120 に変更
+  if (cat === 'stamp-img')   return { width: 120, height: 120 };
+  return { width: 320, height: 95 }; // メッセージ・プレート
+};
+
 
   // タブを2行に分ける（前2つと後2つ）
   const topCats = STAMP_CATEGORIES.slice(0, 2);
