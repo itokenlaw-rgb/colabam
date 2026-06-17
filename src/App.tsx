@@ -935,8 +935,8 @@ interface StampCategoryDef {
 }
 
 const STAMP_CATEGORIES: StampCategoryDef[] = [
-  { id: 'stamp-img',    label: 'スタンプ' },
-  { id: 'masking-tape', label: 'マスキングテープ' },
+  { id: 'stamp-img',    label: 'アイコン' },
+  { id: 'masking-tape', label: 'デコレーション' },
   { id: 'no-bg',        label: 'メッセージ' },
   { id: 'with-bg',      label: 'プレート' },
 ];
@@ -954,7 +954,7 @@ const STAMP_FILES: Record<StampCategory, string[]> = {
     ...Array.from({ length: 13 }, (_, i) => `/stamps/mark/colabamstamp${String(i + 1).padStart(3, '0')}.png`),
   ],
   'masking-tape': [
-    ...Array.from({ length: 13 }, (_, i) => `/stamps/tape/colabamtape${String(i + 1).padStart(3, '0')}.png`),
+    ...Array.from({ length: 13 }, (_, i) => `/stamps/deco/colabamdeco${String(i + 1).padStart(3, '0')}.png`),
   ],
 };
 
