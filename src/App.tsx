@@ -951,7 +951,7 @@ const STAMP_FILES: Record<StampCategory, string[]> = {
     ...Array.from({ length: 12 }, (_, i) => `/stamps/with-bg/colabammojiimg${String(i + 101).padStart(3, '0')}.jpg`),
   ],
   'stamp-img': [
-    ...Array.from({ length: 13 }, (_, i) => `/stamps/mark/colabamstamp${String(i + 1).padStart(3, '0')}.png`),
+    ...Array.from({ length: 24 }, (_, i) => `/stamps/mark/colabamstamp${String(i + 1).padStart(3, '0')}.png`),
   ],
   'masking-tape': [
     ...Array.from({ length: 13 }, (_, i) => `/stamps/deco/colabamdeco${String(i + 1).padStart(3, '0')}.png`),
