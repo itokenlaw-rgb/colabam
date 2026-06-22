@@ -94,10 +94,7 @@ export function ContactModal({ onClose }: ContactModalProps) {
               </div>
               <div style={{ fontSize: 12, color: '#777', lineHeight: 1.7 }}>
                 内容を確認のうえ、メールアプリの送信ボタンを押して完了してください。
-                メールアプリが開かない場合は、下記アドレスへ直接ご連絡ください。
-              </div>
-              <div style={{ marginTop: 14, fontSize: 13 }}>
-                <a href={`mailto:${CONTACT_EMAIL}`} style={{ color: '#f26b9a' }}>{CONTACT_EMAIL}</a>
+                メールアプリが開かない場合は、しばらく時間をおいて再度お試しください。
               </div>
             </div>
           ) : (

@@ -7,8 +7,10 @@
 // （弁護士による確認を推奨します。法的アドバイスではありません）。
 // ====================================================
 
+import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { APP_NAME, OPERATOR_NAME, CONTACT_EMAIL, POLICY_LAST_UPDATED } from './legalConfig';
+import { APP_NAME, OPERATOR_NAME, POLICY_LAST_UPDATED } from './legalConfig';
+import { ContactModal } from './ContactModal';
 
 interface PrivacyPolicyModalProps {
   onClose: () => void;
@@ -28,6 +30,8 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 export function PrivacyPolicyModal({ onClose }: PrivacyPolicyModalProps) {
+  const [showContact, setShowContact] = useState(false);
+
   return (
     <div
       onClick={onClose}
@@ -162,12 +166,22 @@ export function PrivacyPolicyModal({ onClose }: PrivacyPolicyModalProps) {
           </Section>
 
           <Section title="お問い合わせ窓口">
-            本ポリシーに関するお問い合わせは、以下の窓口までご連絡ください。
-            <div style={{ marginTop: 8 }}>
-              運営者：{OPERATOR_NAME}<br />
-              メールアドレス：
-              <a href={`mailto:${CONTACT_EMAIL}`} style={{ color: '#f26b9a' }}>{CONTACT_EMAIL}</a>
+            本ポリシーに関するお問い合わせは、以下のお問い合わせフォームよりご連絡ください。
+            <div style={{ marginTop: 10 }}>
+              運営者：{OPERATOR_NAME}
             </div>
+            <button
+              onClick={() => setShowContact(true)}
+              style={{
+                marginTop: 12,
+                width: '100%', padding: '11px',
+                background: 'none', border: '1.5px solid #f26b9a',
+                borderRadius: 10, color: '#f26b9a',
+                fontSize: 13, fontWeight: 'bold', cursor: 'pointer',
+              }}
+            >
+              お問い合わせフォームを開く
+            </button>
           </Section>
         </div>
 
@@ -186,6 +200,8 @@ export function PrivacyPolicyModal({ onClose }: PrivacyPolicyModalProps) {
           </button>
         </div>
       </div>
+
+      {showContact && <ContactModal onClose={() => setShowContact(false)} />}
     </div>
   );
 }
