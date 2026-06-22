@@ -963,8 +963,8 @@ function StampMenu({ onAdd }: { onAdd: (url: string, opts?: { width?: number; he
   const files = STAMP_FILES[activeCategory];
 
 const getAddOpts = (cat: StampCategory) => {
-  if (cat === 'masking-tape') return { width: 80, height: 80 };  // 240から3分の1の「80」に変更
-  if (cat === 'stamp-img')   return { width: 120, height: 120 };
+  if (cat === 'masking-tape') return { width: 40, height: 40 };  // 240から3分の1の「80」に変更
+  if (cat === 'stamp-img')   return { width: 40, height: 40 };
   return { width: 320, height: 95 }; // メッセージ・プレート
 };
 
