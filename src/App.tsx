@@ -9,6 +9,8 @@ import CropModal from './CropModal';
 import './index.css';
 import { usePlan } from './hooks/usePlan';
 import { UpgradeModal } from './UpgradeModal';
+import { PrivacyPolicyModal } from './PrivacyPolicyModal';
+import { ContactModal } from './ContactModal';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth as fbAuth } from './firebase';
 
@@ -472,12 +474,44 @@ function getClipPathStyle(shape: ClipShape): React.CSSProperties {
   return {};
 }
 
-function LoginScreen({ onClose }: { onClose: () => void }) {
+function SettingsModal({ onClose }: { onClose: () => void }) {
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [isRegister, setIsRegister] = React.useState(false);
   const [error, setError] = React.useState('');
   const [loading, setLoading] = React.useState(false);
+  const [showPrivacy, setShowPrivacy] = React.useState(false);
+  const [showContact, setShowContact] = React.useState(false);
+
+  // 設定画面の一番下に表示する「プライバシーポリシー / お問い合わせ」リンク
+  const legalFooter = (
+    <div style={{
+      display: 'flex', justifyContent: 'center', gap: 18,
+      marginTop: 20, paddingTop: 14,
+      borderTop: '1px solid #f0f0f0',
+    }}>
+      <button
+        onClick={() => setShowPrivacy(true)}
+        style={{ background: 'none', border: 'none', color: '#999', fontSize: 11, cursor: 'pointer', textDecoration: 'underline', padding: 4 }}
+      >
+        プライバシーポリシー
+      </button>
+      <button
+        onClick={() => setShowContact(true)}
+        style={{ background: 'none', border: 'none', color: '#999', fontSize: 11, cursor: 'pointer', textDecoration: 'underline', padding: 4 }}
+      >
+        お問い合わせ
+      </button>
+    </div>
+  );
+
+  // プライバシーポリシー / お問い合わせモーダル（ログイン状態に関わらず共通で表示）
+  const legalModals = (
+    <>
+      {showPrivacy && <PrivacyPolicyModal onClose={() => setShowPrivacy(false)} />}
+      {showContact && <ContactModal onClose={() => setShowContact(false)} />}
+    </>
+  );
 
   const handleManageSubscription = async () => {
     const uid = fbAuth.currentUser?.uid;
@@ -546,6 +580,7 @@ function LoginScreen({ onClose }: { onClose: () => void }) {
         <div onClick={e => e.stopPropagation()} style={{width:'100%',maxWidth:340,background:'white',borderRadius:20,padding:'32px 24px',boxShadow:'0 4px 24px rgba(0,0,0,0.12)',position:'relative'}}>
           <button onClick={onClose} style={{position:'absolute',top:12,left:16,background:'none',border:'none',fontSize:20,color:'#bbb',cursor:'pointer',lineHeight:1,padding:4}}>×</button>
           <div style={{textAlign:'center',marginBottom:24}}>
+            <div style={{fontSize:13,fontWeight:'bold',color:'#aaa',letterSpacing:1,marginBottom:10}}>設定</div>
             <div style={{fontSize:32,marginBottom:8}}>👤</div>
             <div style={{fontSize:14,color:'#555'}}>{currentUser.email}</div>
           </div>
@@ -555,11 +590,19 @@ function LoginScreen({ onClose }: { onClose: () => void }) {
           >
             サブスクを管理・解約する
           </button>
+          <button
+            onClick={() => signOut(fbAuth)}
+            style={{width:'100%',padding:'13px',background:'none',border:'1px solid #ddd',borderRadius:10,color:'#888',fontSize:14,fontWeight:'bold',cursor:'pointer',marginBottom:10}}
+          >
+            ログアウト
+          </button>
           <button onClick={onClose} style={{width:'100%',padding:'8px',background:'none',border:'none',color:'#ccc',fontSize:12,cursor:'pointer'}}>
             キャンセル
           </button>
           {error && <div style={{color:'#e05555',fontSize:12,marginTop:8,textAlign:'center'}}>{error}</div>}
+          {legalFooter}
         </div>
+        {legalModals}
       </div>
     );
   }
@@ -574,6 +617,7 @@ function LoginScreen({ onClose }: { onClose: () => void }) {
         <button onClick={onClose} style={{position:'absolute',top:12,left:16,background:'none',border:'none',fontSize:20,color:'#bbb',cursor:'pointer',lineHeight:1,padding:4}}>×</button>
 
         <div style={{textAlign:'center',marginBottom:24}}>
+          <div style={{fontSize:13,fontWeight:'bold',color:'#aaa',letterSpacing:1,marginBottom:10}}>設定</div>
           <div style={{fontSize:32,marginBottom:8}}>🎨</div>
           <div style={{fontSize:20,fontWeight:'bold',color:'#333'}}>{isRegister ? '新規登録' : 'ログイン'}</div>
         </div>
@@ -619,7 +663,9 @@ function LoginScreen({ onClose }: { onClose: () => void }) {
         <button onClick={onClose} style={{width:'100%',padding:'8px',background:'none',border:'none',color:'#ccc',fontSize:12,cursor:'pointer',marginTop:4}}>
           キャンセル
         </button>
+        {legalFooter}
       </div>
+      {legalModals}
     </div>
   );
 }
@@ -1420,7 +1466,7 @@ export default function App() {
   const [pendingFillStockIdx, setPendingFillStockIdx] = useState<0 | 1 | 2 | null>(null);
 
   const { isPro, user, loading: planLoading } = usePlan();
-  const [showLoginModal, setShowLoginModal] = React.useState(false);
+  const [showSettingsModal, setShowSettingsModal] = React.useState(false);
 
   // ===== 保存回数制限（free: 1日3回まで）=====
   const SAVE_LIMIT = 3;
@@ -2298,45 +2344,23 @@ const handleFillStockSelected = (stockIdx: 0 | 1 | 2) => {
           <Undo2 size={18} />
           <span>戻る</span>
         </button>
-        {/* 中央：ログイン/ログアウトボタン */}
-        {user ? (
-          <>
-            {isPro && (
-              <button
-                onClick={() => setShowLoginModal(true)}
-                style={{background:'none',border:'1px solid #f26b9a',borderRadius:20,color:'#f26b9a',fontSize:11,cursor:'pointer',padding:'6px 12px'}}
-              >
-                👑 管理
-              </button>
-            )}
-            <button
-              onClick={() => signOut(fbAuth)}
-              title={user.email ?? ''}
-              style={{
-                background: 'none', border: '1px solid #ddd',
-                borderRadius: 20, color: '#888', fontSize: 12,
-                cursor: 'pointer', padding: '6px 14px',
-                display: 'flex', alignItems: 'center', gap: 5,
-              }}
-            >
-              {isPro ? '👑' : '👤'} ログアウト
-            </button>
-          </>
-        ) : (
-          <button
-            onClick={() => setShowLoginModal(true)}
-            style={{
-              background: 'linear-gradient(135deg, #f26b9a, #9b59b6)',
-              border: 'none', borderRadius: 20, color: 'white',
-              fontSize: 12, fontWeight: 'bold',
-              cursor: 'pointer', padding: '6px 16px',
-              display: 'flex', alignItems: 'center', gap: 5,
-              boxShadow: '0 2px 8px rgba(242,107,154,0.4)',
-            }}
-          >
-            🔑 ログイン
-          </button>
-        )}
+        {/* 中央：設定ボタン（ログイン状態に関わらず常に表示） */}
+        <button
+          onClick={() => setShowSettingsModal(true)}
+          title={user?.email ?? ''}
+          style={{
+            background: user ? 'none' : 'linear-gradient(135deg, #f26b9a, #9b59b6)',
+            border: user ? '1px solid #ddd' : 'none',
+            borderRadius: 20,
+            color: user ? '#888' : 'white',
+            fontSize: 12, fontWeight: 'bold',
+            cursor: 'pointer', padding: '6px 16px',
+            display: 'flex', alignItems: 'center', gap: 5,
+            boxShadow: user ? 'none' : '0 2px 8px rgba(242,107,154,0.4)',
+          }}
+        >
+          {user ? (isPro ? '👑' : '👤') : '⚙️'} 設定
+        </button>
         <button
           className="header-btn save-btn"
           onClick={saveAlbum}
@@ -2346,6 +2370,7 @@ const handleFillStockSelected = (stockIdx: 0 | 1 | 2) => {
           <span>{isPro ? '保存' : `保存(🔑${saveRemaining})`}</span>
         </button>
       </header>
+
 
       <main className="canvas-area" onClick={() => { setSelectedId(null); setPhotoSubMenuId(null); setPhotoSubMenuPos(null); setItemSubMenuId(null); setItemSubMenuPos(null); setActiveMainTab(null); setShowPhotoAddMenu(false); }}>
         <div
@@ -3494,9 +3519,9 @@ const handleFillStockSelected = (stockIdx: 0 | 1 | 2) => {
         <PreviewModal dataUrl={previewUrl} onClose={() => setPreviewUrl(null)} />
       )}
 
-      {/* ログインモーダル */}
-      {showLoginModal && (
-        <LoginScreen onClose={() => setShowLoginModal(false)} />
+      {/* 設定モーダル（ログイン・ログアウト・プライバシーポリシー・お問い合わせ） */}
+      {showSettingsModal && (
+        <SettingsModal onClose={() => setShowSettingsModal(false)} />
       )}
     </div>
   );
