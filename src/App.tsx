@@ -962,8 +962,31 @@ function StampMenu({ onAdd }: { onAdd: (url: string, opts?: { width?: number; he
   const [activeCategory, setActiveCategory] = useState<StampCategory>('stamp-img');
   const files = STAMP_FILES[activeCategory];
 
-const getAddOpts = (cat: StampCategory) => {
-  if (cat === 'masking-tape') return { width: 40, height: 40 };  // 240から3分の1の「80」に変更
+const getAddOpts = (cat: StampCategory, src?: string) => {
+  if (cat === 'masking-tape' && src) {
+    // ファイル名（例: colabamdeco001.png）を抽出
+    const fileName = src.split('/').pop() || '';
+    const match = fileName.match(/colabamdeco(\d+)/);
+    
+    if (match) {
+      const num = parseInt(match[1], 10);
+      
+      // 001〜003：正方形 (80 x 80)
+      if (num >= 1 && num <= 3) {
+        return { width: 80, height: 80 };
+      }
+      // 004〜007：長方形（吹き出しなど・横長 120 x 80）
+      if (num >= 4 && num <= 7) {
+        return { width: 120, height: 80 };
+      }
+      // 008〜013：テープの長さ（細長いリボン 240 x 40）
+      if (num >= 8 && num <= 13) {
+        return { width: 240, height: 40 };
+      }
+    }
+    return { width: 80, height: 80 }; // 念のための一致しない場合のデフォルト
+  }
+  
   if (cat === 'stamp-img')   return { width: 40, height: 40 };
   return { width: 320, height: 95 }; // メッセージ・プレート
 };
@@ -1009,7 +1032,7 @@ const getAddOpts = (cat: StampCategory) => {
           {files.map((src, i) => (
             <button
               key={src}
-              onClick={() => onAdd(src, getAddOpts(activeCategory))}
+onClick={() => onAdd(src, getAddOpts(activeCategory, src))}
               style={{
                 width: 52, height: 52, borderRadius: 8, padding: 2,
                 border: '1px solid #eee', background: 'white',
