@@ -989,8 +989,9 @@ const STAMP_CATEGORIES: StampCategoryDef[] = [
 
 const STAMP_FILES: Record<StampCategory, string[]> = {
   'no-bg': [
-    ...Array.from({ length: 12 }, (_, i) => `/stamps/no-bg/colabammojitouka${String(i + 1).padStart(3, '0')}.png`),
+    ...Array.from({ length: 4 },  (_, i) => `/stamps/no-bg/colabammojitouka${String(i + 1).padStart(3, '0')}.png`),
     ...Array.from({ length: 12 }, (_, i) => `/stamps/no-bg/colabammojitouka${String(i + 101).padStart(3, '0')}.png`),
+    ...Array.from({ length: 12 }, (_, i) => `/stamps/no-bg/colabammojitouka${String(i + 201).padStart(3, '0')}.png`),
   ],
   'with-bg': [
     ...Array.from({ length: 12 }, (_, i) => `/stamps/with-bg/colabammojiimg${String(i + 1).padStart(3, '0')}.jpg`),
